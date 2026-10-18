@@ -1,0 +1,16 @@
+{
+  "manifest": "twin.manifest.json",
+  "backend": "s7",
+  "plc": {
+    "ip": "192.168.0.1",
+    "rack": 0,
+    "slot": 1
+  },
+  "ws": {
+    "host": "127.0.0.1",
+    "port": 8765,
+    "token": ""
+  },
+  "pollHz": 10,
+  "logLevel": "info"
+}

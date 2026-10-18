@@ -1,0 +1,890 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>输送带分拣线 · 3D Twin</title>
+<style>
+  :root {
+    --bg: #050d14; --panel: rgba(9, 22, 33, .88); --line: #1b3447;
+    --text: #e6f1f8; --soft: #b2c7d5; --dim: #7e97aa; --faint: #4d6578;
+    --cyan: #3dd6f5; --cyan-dim: #1d7d95; --green: #54e6a1;
+    --amber: #ffb454; --red: #ff5d63;
+    --mono: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+    --sans: "PingFang SC", "Noto Sans CJK SC", "Microsoft YaHei", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: var(--sans); overflow: hidden; }
+  #stage { position: fixed; inset: 0; }
+  #stage canvas { display: block; width: 100%; height: 100%; }
+  .top {
+    position: fixed; inset: 16px 18px auto 18px; z-index: 9;
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 14px;
+    pointer-events: none;
+  }
+  .brand, .top-status, .mode-switch { pointer-events: auto; }
+  .brand {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    padding: 10px 14px; backdrop-filter: blur(10px);
+  }
+  .brand-mark { width: 8px; height: 34px; border-radius: 2px; background: linear-gradient(180deg, var(--cyan), var(--cyan-dim)); box-shadow: 0 0 20px rgba(61,214,245,.5); }
+  .kicker { font: 600 9px var(--mono); letter-spacing: 2px; color: var(--cyan-dim); }
+  h1 { margin: 3px 0 0; font-size: 19px; font-weight: 600; letter-spacing: .4px; }
+  .sub { margin-top: 3px; font: 500 9px var(--mono); color: var(--faint); letter-spacing: .8px; }
+  .top-status { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+  .pill {
+    font: 600 10px var(--mono); letter-spacing: 1px; padding: 7px 10px; border-radius: 4px;
+    border: 1px solid var(--line); color: var(--dim); background: var(--panel);
+  }
+  .pill.warn { color: var(--amber); border-color: rgba(255,180,84,.35); }
+  .pill.ok { color: var(--green); border-color: rgba(84,230,161,.35); }
+  .pill.bad { color: var(--red); border-color: rgba(255,93,99,.4); }
+  .mono { font-family: var(--mono); }
+  .btn {
+    appearance: none; border: 1px solid var(--line); background: rgba(9,22,33,.9);
+    color: var(--soft); border-radius: 4px; padding: 9px 13px; font-size: 12px; cursor: pointer;
+    transition: border-color .15s, background .15s, color .15s;
+  }
+  .btn:hover { border-color: var(--cyan-dim); color: var(--text); }
+  .btn.primary { background: var(--cyan); color: #06131a; border-color: rgba(61,214,245,.6); font-weight: 600; }
+  .btn.primary:hover { background: #6fe4ff; }
+  .btn.danger { color: var(--red); border-color: rgba(255,93,99,.45); background: rgba(255,93,99,.06); }
+  .btn.danger:hover { background: rgba(255,93,99,.14); }
+  .hud {
+    position: fixed; left: 18px; bottom: 18px; z-index: 5;
+    display: flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden;
+    background: var(--panel); backdrop-filter: blur(10px);
+  }
+  .hud-item { min-width: 86px; padding: 9px 12px 8px; border-left: 1px solid var(--line); }
+  .hud-item:first-child { border-left: none; }
+  .hud-item span { display: block; font: 600 8px var(--mono); letter-spacing: 1px; color: var(--faint); }
+  .hud-item strong { display: block; margin-top: 3px; font: 600 17px var(--mono); }
+  .controls {
+    position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 5;
+    display: flex; gap: 8px; padding: 8px; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--panel); backdrop-filter: blur(10px);
+  }
+  .hint {
+    position: fixed; right: 18px; bottom: 22px; z-index: 5;
+    font: 500 9px var(--mono); letter-spacing: .6px; color: var(--faint); text-align: right;
+    pointer-events: none;
+  }
+  .hint strong { color: var(--cyan-dim); font-weight: 500; }
+  dialog {
+    border: 1px solid var(--line); border-radius: 8px; background: #081520; color: var(--text);
+    padding: 18px; width: min(420px, calc(100vw - 36px)); box-shadow: 0 28px 80px rgba(0,0,0,.6);
+  }
+  dialog::backdrop { background: rgba(2, 8, 12, .6); backdrop-filter: blur(3px); }
+  dialog h2 { margin: 0 0 12px; font-size: 15px; font-weight: 600; }
+  dialog label { display: block; margin: 10px 0 4px; font-size: 10px; color: var(--dim); }
+  dialog input {
+    width: 100%; padding: 9px 10px; border: 1px solid var(--line); border-radius: 4px;
+    background: #06121b; color: var(--text); font: 10px var(--mono); outline: none;
+  }
+  dialog input:focus { border-color: var(--cyan-dim); }
+  .dlg-actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+  .dlg-note { margin: 10px 0 0; font-size: 10px; line-height: 1.5; color: var(--faint); }
+  .link-state { font: 10px var(--mono); color: var(--dim); margin-top: 2px; }
+  .eng { }
+  body:not(.dev) .eng { display: none !important; }
+  .wait-overlay {
+    position: fixed; inset: 0; z-index: 8;
+    display: grid; place-content: center; justify-items: center; gap: 14px;
+    background: radial-gradient(700px 360px at 50% 45%, rgba(14,45,62,.55), transparent 70%), rgba(5,13,20,.9);
+    color: var(--soft); font: 11px var(--mono); letter-spacing: .8px; text-align: center;
+  }
+  .wait-overlay.hidden { display: none; }
+  .wait-overlay .btn { padding: 7px 14px; font-size: 10px; }
+  .spinner {
+    width: 28px; height: 28px; border-radius: 50%;
+    border: 2px solid rgba(61,214,245,.18); border-top-color: var(--cyan);
+    animation: spin .9s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .controls .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .mode-switch {
+    display: inline-flex; padding: 3px; gap: 3px; border: 1px solid var(--line);
+    background: rgba(9, 22, 33, .85); border-radius: 6px; pointer-events: auto;
+  }
+  .mode-btn {
+    appearance: none; border: 0; background: transparent; color: var(--dim);
+    padding: 8px 15px; border-radius: 4px; font-size: 11px; cursor: pointer;
+  }
+  .mode-btn:hover { color: var(--soft); }
+  .mode-btn.active { background: var(--cyan); color: #06131a; font-weight: 600; }
+  .mode-btn.connected { color: #54e6a1; box-shadow: inset 0 -2px 0 rgba(84,230,161,.8); }
+  .sim-panel {
+    position: fixed; right: 18px; top: 82px; z-index: 5; width: 290px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    backdrop-filter: blur(10px); color: var(--soft);
+  }
+  .sim-panel[open] { padding: 0 10px 10px; }
+  .sim-panel summary {
+    cursor: pointer; padding: 10px 4px; font: 600 11px var(--mono); letter-spacing: .6px; color: var(--soft);
+  }
+  .auto-row { display: flex; align-items: center; gap: 7px; font-size: 10px; color: var(--dim); margin: 2px 0 8px; }
+  .auto-row input { accent-color: var(--cyan); }
+  .sim-rows3d { max-height: 260px; overflow: auto; border: 1px solid var(--line); border-radius: 4px; background: rgba(5,13,20,.5); }
+  .sim-row3d { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px; align-items: center; padding: 6px 8px; border-bottom: 1px solid rgba(28,50,69,.55); }
+  .sim-row3d:last-child { border-bottom: 0; }
+  .sim-row3d .n { font-size: 10px; color: var(--soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sim-row3d .i { font: 8px var(--mono); color: var(--faint); margin-top: 2px; }
+  .sim-row3d input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--cyan); }
+  .sim-row3d input[type="number"] { width: 68px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 3px; background: #06121b; color: var(--text); font: 10px var(--mono); }
+  .dlg-row { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+  .dlg-advanced { margin-top: 8px; }
+  .dlg-advanced summary { cursor: pointer; font-size: 10px; color: var(--faint); padding: 3px 0; }
+  .dlg-row label { display: block; }
+  .dlg-row input { margin-top: 4px; }
+  .sim-panel.hidden { display: none; }
+  @media (max-width: 900px) {
+    .brand { padding: 8px 10px; }
+    h1 { font-size: 16px; }
+    .sub { display: none; }
+    .hud { left: 12px; bottom: 76px; }
+    .hud-item { min-width: 68px; padding: 7px 8px; }
+    .hud-item strong { font-size: 14px; }
+    .controls { bottom: 12px; padding: 6px; gap: 5px; }
+    .controls .btn { padding: 8px 10px; font-size: 11px; }
+    .hint { display: none; }
+    .top { inset: 10px 10px auto 10px; }
+  }
+</style>
+<script type="importmap">
+  { "imports": { "three": "./vendor/three.module.min.js" } }
+</script>
+</head>
+<body>
+<div id="stage"></div>
+<div id="waitOverlay" class="wait-overlay">
+  <div class="spinner"></div>
+  <div id="waitText">正在连接 PLC…</div>
+  <button id="btnRetry" class="btn">重试</button>
+</div>
+
+<header class="top">
+  <div class="brand">
+    <span class="brand-mark"></span>
+    <div>
+      <div class="kicker eng">TIA WEB TWIN / 3D</div>
+      <h1 id="title">输送带分拣线</h1>
+      <div class="sub eng">S7-1500 · TWINIO · PLCSIM ADVANCED</div>
+    </div>
+  </div>
+  <div class="mode-switch" role="tablist" aria-label="仿真模式">
+    <button id="modeOffline" class="mode-btn active" role="tab" aria-selected="true">离线仿真</button>
+    <button id="modeOnline" class="mode-btn" role="tab" aria-selected="false">连接 PLC</button>
+  </div>
+</header>
+
+<div class="hud">
+  <div class="hud-item"><span>COUNT</span><strong id="hudCount">0</strong></div>
+  <div class="hud-item"><span>PE1</span><strong id="hudPe">0</strong></div>
+  <div class="hud-item"><span>PUSHER</span><strong id="hudQ">0</strong></div>
+  <div class="hud-item"><span>STATE</span><strong id="hudState">STOPPED</strong></div>
+</div>
+
+<details id="simPanel" class="sim-panel">
+  <summary>仿真数据</summary>
+  <label class="auto-row"><input id="autoSensor" type="checkbox" checked> 自动检测传感器 / 到位</label>
+  <div id="simRows3D" class="sim-rows3d"></div>
+</details>
+
+<div class="controls">
+  <button class="btn primary" data-cmd="cmd.start">启动</button>
+  <button class="btn" data-cmd="cmd.stop">停止</button>
+  <button class="btn" data-cmd="cmd.reset">复位</button>
+  <button class="btn danger" data-cmd="cmd.estop">急停</button>
+</div>
+
+<div class="hint">
+  <div>SIMULATION ONLY — NOT A SAFETY DEVICE</div>
+  <div class="eng"><strong>3D plant model</strong> · snap7 / S7comm · 10 Hz</div>
+</div>
+
+<dialog id="dlg">
+  <h2>连接 PLCSIM Advanced</h2>
+  <label>PLC 地址</label>
+  <input id="plcIp" spellcheck="false" placeholder="192.168.0.1">
+  <details class="dlg-advanced">
+    <summary>高级：Rack / Slot</summary>
+    <div class="dlg-row">
+      <label>Rack <input id="plcRack" type="number" min="0" max="7" value="0"></label>
+      <label>Slot <input id="plcSlot" type="number" min="0" max="31" value="1"></label>
+    </div>
+  </details>
+  <div class="dlg-actions">
+    <button id="btnConnect" class="btn primary">连接</button>
+    <button id="btnClose" class="btn">关闭</button>
+  </div>
+  <p id="linkMsg" class="dlg-note">输入 PLCSIM Advanced 虚拟 PLC 的 IP。网关由启动器在后台运行。</p>
+</dialog>
+
+<script src="./tia-twin-client.js"></script>
+<script type="module">
+import * as THREE from 'three';
+
+const $ = (s) => document.querySelector(s);
+const QS = (s) => Array.from(document.querySelectorAll(s));
+const C = {
+  bg: 0x050d14, cyan: 0x3dd6f5, green: 0x54e6a1, amber: 0xffb454,
+  red: 0xff5d63, steel: 0x7795a8, dark: 0x0a1a26, light: 0xd7e7f0,
+};
+const LS_URL = 'tiaTwin.wsUrl';
+const LS_TOKEN = 'tiaTwin.token';
+
+class MockPlc3D {
+  constructor(manifest) {
+    this.tags = new Map(manifest.tags.map((t) => [t.id, t]));
+    this.values = {};
+    this.tags.forEach((t) => {
+      this.values[t.id] = t.mockInit !== undefined ? t.mockInit : (t.type === 'bool' ? false : (t.type === 'real' ? 0 : 0));
+    });
+    this.values['line.speed'] = 0;
+    this.subs = new Set();
+    this.timer = null;
+  }
+  getAll() { return Object.assign({}, this.values); }
+  subscribe(fn) { this.subs.add(fn); return () => this.subs.delete(fn); }
+  _emit(changed) { if (Object.keys(changed).length) this.subs.forEach((f) => f(Object.assign({}, changed))); }
+  _set(c, id, v) { if (this.values[id] !== v) { this.values[id] = v; c[id] = v; } }
+  _stop(c) { if (this.timer) { clearTimeout(this.timer); this.timer = null; } this._set(c, 'out.cyl', false); }
+  write(tag, val) {
+    if (!this.tags.has(tag)) return;
+    const c = {};
+    const prev = this.values[tag];
+    this._set(c, tag, val);
+    if (tag === 'cmd.start' && val) {
+      this._stop(c); this._set(c, 'line.fault', false); this._set(c, 'line.running', true);
+      this._set(c, 'line.speed', 0.15); this._set(c, 'stack.green', true); this._set(c, 'stack.red', false);
+    } else if (tag === 'cmd.stop' && val) {
+      this._stop(c); this._set(c, 'line.running', false); this._set(c, 'line.speed', 0);
+      this._set(c, 'stack.green', false);
+    } else if (tag === 'cmd.reset' && val) {
+      this._stop(c); this._set(c, 'line.fault', false); this._set(c, 'stack.red', false);
+      const run = !!this.values['line.running'];
+      this._set(c, 'stack.green', run); this._set(c, 'line.speed', run ? 0.15 : 0);
+    } else if (tag === 'cmd.estop' && val) {
+      this._stop(c); this._set(c, 'line.fault', true); this._set(c, 'line.running', false);
+      this._set(c, 'line.speed', 0); this._set(c, 'stack.green', false); this._set(c, 'stack.red', true);
+    } else if (tag === 'sensor.pe1' && val && !prev && this.values['line.running'] && !this.values['line.fault']) {
+      this._set(c, 'box.count', (Number(this.values['box.count']) || 0) + 1);
+      this._set(c, 'out.cyl', true);
+      if (this.timer) clearTimeout(this.timer);
+      this.timer = setTimeout(() => { const ch = {}; this._set(ch, 'out.cyl', false); this._emit(ch); }, 650);
+    }
+    this._emit(c);
+  }
+  pulse(tag, ms) { this.write(tag, true); setTimeout(() => this.write(tag, false), ms || 150); }
+}
+
+class Line3D {
+  constructor(el, twin) {
+    this.el = el;
+    this.twin = twin;
+    this.boxes = [];
+    this.seq = 0;
+    this.spawnIn = 1.0;
+    this.sensor = false;
+    this.feedback = false;
+    this.autoSensor = true;
+    this.plcReady = true;
+    this.pusher = 0;
+    this.beltOffset = 0;
+    this.syncIn = 0;
+    this.lastSensor = null;
+    this.lastFeedback = null;
+    this.clock = new THREE.Clock();
+    this.yaw = 0.72;
+    this.pitch = 0.36;
+    this.radius = 13.5;
+    this.target = new THREE.Vector3(0.6, 1.0, 0);
+    this.dragging = false;
+    this.lastPointer = { x: 0, y: 0 };
+    this.initScene();
+    this.initStage();
+    this.lastSim = performance.now();
+    this.simTimer = setInterval(() => {
+      const now = performance.now();
+      const dt = Math.min(0.5, (now - this.lastSim) / 1000);
+      this.lastSim = now;
+      this.step(dt);
+    }, 50);
+    requestAnimationFrame(this.animate);
+  }
+
+  initScene() {
+    this.renderer = new THREE.WebGLRenderer({ antialias: true });
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+    this.renderer.setSize(this.el.clientWidth, this.el.clientHeight);
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.05;
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.el.appendChild(this.renderer.domElement);
+
+    this.scene = new THREE.Scene();
+    this.scene.background = new THREE.Color(C.bg);
+    this.scene.fog = new THREE.FogExp2(C.bg, 0.021);
+    this.camera = new THREE.PerspectiveCamera(42, this.el.clientWidth / this.el.clientHeight, 0.1, 100);
+
+    const hemi = new THREE.HemisphereLight(0x9fdcff, 0x07131c, 1.1);
+    this.scene.add(hemi);
+    const key = new THREE.DirectionalLight(0xffffff, 2.0);
+    key.position.set(6, 11, 8);
+    key.castShadow = true;
+    key.shadow.mapSize.set(2048, 2048);
+    key.shadow.camera.near = 1; key.shadow.camera.far = 30;
+    key.shadow.camera.left = -10; key.shadow.camera.right = 10;
+    key.shadow.camera.top = 9; key.shadow.camera.bottom = -6;
+    this.scene.add(key);
+    const rim = new THREE.PointLight(C.cyan, 22, 18, 2);
+    rim.position.set(-6, 4, -4);
+    this.scene.add(rim);
+    const warm = new THREE.PointLight(C.amber, 12, 12, 2);
+    warm.position.set(5, 3, 3);
+    this.scene.add(warm);
+
+    const floorMat = new THREE.MeshStandardMaterial({ color: 0x07131d, roughness: 0.85, metalness: 0.2 });
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(50, 50), floorMat);
+    floor.rotation.x = -Math.PI / 2;
+    floor.receiveShadow = true;
+    this.scene.add(floor);
+    const grid = new THREE.GridHelper(50, 50, 0x1e5468, 0x102d3b);
+    grid.position.y = 0.005;
+    grid.material.transparent = true; grid.material.opacity = 0.45;
+    this.scene.add(grid);
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(8.2, 8.25, 128),
+      new THREE.MeshBasicMaterial({ color: 0x1d7d95, transparent: true, opacity: 0.35, side: THREE.DoubleSide })
+    );
+    ring.rotation.x = -Math.PI / 2; ring.position.y = 0.01;
+    this.scene.add(ring);
+
+    this.buildConveyor();
+    this.buildSensor();
+    this.buildPusher();
+    this.buildBin();
+    this.buildStackLight();
+    this.buildCabinet();
+    this.resize();
+    window.addEventListener('resize', () => this.resize());
+  }
+
+  initStage() {
+    const dom = this.renderer.domElement;
+    dom.style.touchAction = 'none';
+    dom.addEventListener('pointerdown', (e) => {
+      this.dragging = true;
+      this.lastPointer = { x: e.clientX, y: e.clientY };
+      dom.setPointerCapture(e.pointerId);
+    });
+    dom.addEventListener('pointermove', (e) => {
+      if (!this.dragging) return;
+      const dx = e.clientX - this.lastPointer.x;
+      const dy = e.clientY - this.lastPointer.y;
+      this.lastPointer = { x: e.clientX, y: e.clientY };
+      this.yaw -= dx * 0.006;
+      this.pitch = THREE.MathUtils.clamp(this.pitch + dy * 0.004, 0.12, 0.95);
+    });
+    dom.addEventListener('pointerup', (e) => {
+      this.dragging = false;
+      try { dom.releasePointerCapture(e.pointerId); } catch (_) {}
+    });
+    dom.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      this.radius = THREE.MathUtils.clamp(this.radius + e.deltaY * 0.01, 7, 24);
+    }, { passive: false });
+  }
+
+  resize() {
+    const w = this.el.clientWidth, h = this.el.clientHeight;
+    if (!w || !h) return;
+    this.camera.aspect = w / h;
+    this.camera.updateProjectionMatrix();
+    this.renderer.setSize(w, h);
+  }
+
+  mat(color, opts = {}) {
+    return new THREE.MeshStandardMaterial(Object.assign({
+      color, roughness: 0.52, metalness: 0.5,
+    }, opts));
+  }
+
+  buildConveyor() {
+    const g = new THREE.Group();
+    const belt = new THREE.Mesh(new THREE.BoxGeometry(12, 0.16, 1.4), this.mat(0x122a39, { roughness: 0.75, metalness: 0.35 }));
+    belt.position.set(0, 0.92, 0);
+    belt.receiveShadow = true; belt.castShadow = true;
+    g.add(belt);
+    for (const z of [-0.74, 0.74]) {
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(12.1, 0.24, 0.08), this.mat(0x3a5b70, { metalness: 0.75, roughness: 0.35 }));
+      rail.position.set(0, 1.02, z);
+      rail.castShadow = true;
+      g.add(rail);
+    }
+    for (let x = -5.6; x <= 5.7; x += 0.8) {
+      const roller = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 1.34, 18), this.mat(0x718b9c, { metalness: 0.85, roughness: 0.28 }));
+      roller.rotation.x = Math.PI / 2;
+      roller.position.set(x, 0.92, 0);
+      g.add(roller);
+    }
+    for (const x of [-4.8, -1.6, 1.6, 4.8]) {
+      for (const z of [-0.52, 0.52]) {
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.86, 0.14), this.mat(0x2b4759, { metalness: 0.7 }));
+        leg.position.set(x, 0.43, z);
+        leg.castShadow = true;
+        g.add(leg);
+      }
+    }
+    this.scene.add(g);
+    this.conveyor = g;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 256; canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#0b202d'; ctx.fillRect(0, 0, 256, 64);
+    ctx.strokeStyle = 'rgba(120,170,195,.35)'; ctx.lineWidth = 3;
+    for (let i = -64; i < 320; i += 40) {
+      ctx.beginPath(); ctx.moveTo(i, 64); ctx.lineTo(i + 64, 0); ctx.stroke();
+    }
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(10, 1); tex.colorSpace = THREE.SRGBColorSpace;
+    const top = new THREE.Mesh(new THREE.PlaneGeometry(12, 1.36), new THREE.MeshStandardMaterial({
+      map: tex, roughness: 0.8, metalness: 0.15, color: 0xbfd9e4,
+    }));
+    top.rotation.x = -Math.PI / 2; top.position.set(0, 1.005, 0);
+    this.scene.add(top);
+    this.beltTexture = tex;
+  }
+
+  buildSensor() {
+    const x = 1.6;
+    const g = new THREE.Group();
+    for (const z of [-0.86, 0.86]) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.18, 1.45, 0.18), this.mat(0x29495c, { metalness: 0.7 }));
+      post.position.set(x, 1.68, z); post.castShadow = true;
+      g.add(post);
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.07, 16, 12), new THREE.MeshStandardMaterial({
+        color: 0x123040, emissive: C.cyan, emissiveIntensity: 1.4,
+      }));
+      eye.position.set(x, 1.55, z); g.add(eye);
+      if (z > 0) this.eyeMat = eye.material;
+    }
+    const beamMat = new THREE.MeshBasicMaterial({ color: C.cyan, transparent: true, opacity: 0.7 });
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 1.7, 6), beamMat);
+    beam.rotation.x = Math.PI / 2; beam.position.set(x, 1.55, 0);
+    g.add(beam);
+    this.beam = beam; this.beamMat = beamMat;
+    const plate = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.05, 0.34), this.mat(0x153242, { metalness: 0.6 }));
+    plate.position.set(x, 2.43, 0); g.add(plate);
+    this.scene.add(g);
+  }
+
+  buildPusher() {
+    const g = new THREE.Group();
+    g.position.set(2.95, 0, 0);
+    const mount = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.12, 0.7), this.mat(0x2d4b5d, { metalness: 0.8 }));
+    mount.position.set(0, 1.88, 1.25); mount.castShadow = true; g.add(mount);
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 1.05, 24), this.mat(C.steel, { metalness: 0.85, roughness: 0.25 }));
+    body.rotation.x = Math.PI / 2; body.position.set(0, 1.35, 1.15); body.castShadow = true; g.add(body);
+    for (let i = 0; i < 4; i++) {
+      const band = new THREE.Mesh(new THREE.TorusGeometry(0.225, 0.012, 6, 24), new THREE.MeshBasicMaterial({ color: 0x1d7d95 }));
+      band.rotation.x = Math.PI / 2; band.position.set(0, 1.35, 0.75 + i * 0.25); g.add(band);
+    }
+    const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 1.0, 16), this.mat(0xdce8ef, { metalness: 0.95, roughness: 0.1 }));
+    rod.rotation.x = Math.PI / 2; rod.position.set(0, 1.35, 0.78); g.add(rod);
+    const plate = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.09), this.mat(C.steel, { metalness: 0.8 }));
+    plate.position.set(0, 1.35, 0.6); plate.castShadow = true; g.add(plate);
+    const bracket = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.6, 0.22), this.mat(0x2a485a, { metalness: 0.75 }));
+    bracket.position.set(0, 1.62, 1.15); g.add(bracket);
+    this.pusherGroup = g; this.pusherRod = rod; this.pusherPlate = plate;
+    this.scene.add(g);
+  }
+
+  buildBin() {
+    const g = new THREE.Group();
+    g.position.set(3.0, 0, -2.55);
+    const mat = this.mat(0x264356, { metalness: 0.7, roughness: 0.45 });
+    const base = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.1, 1.2), mat);
+    base.position.y = 0.08; base.receiveShadow = true; g.add(base);
+    for (const [x, z, w, d] of [[-0.7, 0, 0.08, 1.2], [0.7, 0, 0.08, 1.2], [0, -0.55, 1.5, 0.08], [0, 0.55, 1.5, 0.08]]) {
+      const wall = new THREE.Mesh(new THREE.BoxGeometry(w, 0.6, d), mat);
+      wall.position.set(x, 0.36, z); wall.castShadow = true; g.add(wall);
+    }
+    this.bin = g; this.binStack = [];
+    this.scene.add(g);
+  }
+
+  buildStackLight() {
+    const g = new THREE.Group();
+    g.position.set(-5.1, 0, -1.8);
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 2.1, 10), this.mat(0x3a566a, { metalness: 0.8 }));
+    pole.position.y = 1.05; g.add(pole);
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.3, 0.12, 20), this.mat(0x223e50, { metalness: 0.7 }));
+    base.position.y = 0.06; g.add(base);
+    this.lamps = {};
+    const defs = [['red', C.red, 2.16], ['amber', C.amber, 1.96], ['green', C.green, 1.76]];
+    defs.forEach(([key, color, y]) => {
+      const m = new THREE.MeshStandardMaterial({ color: 0x0c1c28, emissive: color, emissiveIntensity: 0.05, roughness: 0.35 });
+      const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.16, 20, 14), m);
+      lamp.position.y = y; g.add(lamp); this.lamps[key] = m;
+    });
+    this.scene.add(g);
+  }
+
+  buildCabinet() {
+    const g = new THREE.Group();
+    g.position.set(-5.4, 0, 1.6);
+    const body = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.8, 0.8), this.mat(0x173142, { metalness: 0.65, roughness: 0.5 }));
+    body.position.y = 0.9; body.castShadow = true; g.add(body);
+    const door = new THREE.Mesh(new THREE.BoxGeometry(1.02, 1.5, 0.02), this.mat(0x0d2130, { metalness: 0.5 }));
+    door.position.set(0, 0.95, 0.41); g.add(door);
+    for (let i = 0; i < 3; i++) {
+      const led = new THREE.Mesh(new THREE.SphereGeometry(0.025, 10, 8), new THREE.MeshBasicMaterial({ color: i === 0 ? C.green : C.cyan }));
+      led.position.set(-0.34 + i * 0.09, 1.38, 0.43); g.add(led);
+    }
+    this.scene.add(g);
+  }
+
+  makeBox() {
+    const id = ++this.seq;
+    const g = new THREE.Group();
+    const color = id % 2 ? C.cyan : C.amber;
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.5, 0.6), this.mat(0x1a3546, {
+      metalness: 0.35, roughness: 0.55, emissive: color, emissiveIntensity: 0.035,
+    }));
+    mesh.castShadow = true;
+    g.add(mesh);
+    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry), new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.8 }));
+    g.add(edges);
+    g.position.set(-5.7, 1.28, 0);
+    this.scene.add(g);
+    return { id, mode: 'belt', x: -5.7, y: 1.28, z: 0, vy: 0, mesh: g };
+  }
+
+  step(dt) {
+    const running = !!this.twin.get('line.running') && !this.twin.get('line.fault');
+    const speed = Number(this.twin.get('line.speed') || 0);
+    this.beltTexture.offset.x -= (running ? 0.12 + speed * 0.5 : 0.01) * dt;
+    if (running) {
+      this.spawnIn -= dt;
+      if (this.spawnIn <= 0) {
+        this.spawnIn = 2.35;
+        this.boxes.push(this.makeBox());
+      }
+    }
+    const move = (running ? 1.3 + speed * 2.2 : 0) * dt;
+    for (const b of this.boxes) {
+      if (b.mode === 'belt') { b.x += move; }
+      else if (b.mode === 'fall') {
+        b.z -= 2.4 * dt;
+        b.vy += 7.5 * dt;
+        b.y -= b.vy * dt;
+      }
+    }
+    if (this.autoSensor) this.sensor = this.boxes.some((b) => b.mode === 'belt' && Math.abs(b.x - 1.6) < 0.33);
+    else this.sensor = !!this.twin.get('sensor.pe1');
+    const cmd = !!this.twin.get('out.cyl');
+    const target = cmd && !this.twin.get('line.fault') ? 1 : 0;
+    this.pusher += (target - this.pusher) * Math.min(1, dt * 9);
+    if (this.pusher < 0.02) this.pusher = 0;
+    for (const b of this.boxes) {
+      if (b.mode === 'belt' && b.x > 2.45 && b.x < 3.55 && this.pusher > 0.3) { b.mode = 'fall'; b.vy = 0.2; }
+    }
+    this.boxes = this.boxes.filter((b) => {
+      const keep = b.mode === 'belt' ? b.x < 6.1 : b.y > 0.18;
+      if (!keep) this.scene.remove(b.mesh);
+      return keep;
+    });
+    this.boxes.forEach((b) => { b.mesh.position.set(b.x, b.y, b.z); });
+
+    const ext = this.pusher;
+    const rodLen = 0.35 + ext * 0.95;
+    this.pusherRod.scale.y = rodLen;
+    this.pusherRod.position.z = 0.95 - rodLen / 2;
+    this.pusherPlate.position.z = 0.95 - rodLen;
+    this.beamMat.color.setHex(this.sensor ? C.red : C.cyan);
+    this.beamMat.opacity = this.sensor ? 0.95 : 0.55;
+    if (this.eyeMat) this.eyeMat.emissiveIntensity = this.sensor ? 2.2 : 1.1;
+
+    const count = Number(this.twin.get('box.count') || 0);
+    this.updateBin(count);
+    const fault = !!this.twin.get('line.fault');
+    this.lamps.red.emissiveIntensity = fault ? 3.2 : 0.05;
+    this.lamps.green.emissiveIntensity = running ? 2.4 : 0.05;
+    this.lamps.amber.emissiveIntensity = fault ? 0.6 : 0.05;
+
+    const fb = this.pusher > 0.9;
+    if (fb !== this.feedback) this.feedback = fb;
+    this.syncIn += dt;
+    if (this.syncIn >= 0.1) {
+      this.syncIn = 0;
+      const patch = {};
+      if (this.lastSensor !== this.sensor) { this.lastSensor = this.sensor; patch['sensor.pe1'] = this.sensor; }
+      if (this.lastFeedback !== this.feedback) { this.lastFeedback = this.feedback; patch['cyl.extended'] = this.feedback; }
+      if (this.autoSensor && this.plcReady && Object.keys(patch).length && (this.twin.status === 'online' || this.twin.status === 'mock')) {
+        this.twin.writeMany(patch).catch(() => {});
+      }
+    }
+    this.updateHud(running, fault);
+  }
+
+  updateBin(count) {
+    const want = Math.min(5, count % 6);
+    while (this.binStack.length < want) {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.12, 0.38), this.mat(0x274a5d, { metalness: 0.3, emissive: C.cyan, emissiveIntensity: 0.03 }));
+      m.position.set((this.binStack.length % 2) * 0.44 - 0.22, 0.18 + Math.floor(this.binStack.length / 2) * 0.13, (this.binStack.length % 3) * 0.18 - 0.18);
+      this.bin.add(m); this.binStack.push(m);
+    }
+    while (this.binStack.length > want) {
+      const m = this.binStack.pop(); this.bin.remove(m);
+    }
+  }
+
+  updateHud(running, fault) {
+    const count = this.twin.get('box.count');
+    const pe = this.twin.get('sensor.pe1');
+    const q = this.twin.get('out.cyl');
+    $('#hudCount').textContent = count === undefined ? '—' : String(count);
+    $('#hudPe').textContent = pe ? '1' : '0';
+    $('#hudPe').style.color = pe ? '#ff5d63' : '';
+    $('#hudQ').textContent = q ? '1' : '0';
+    $('#hudQ').style.color = q ? '#ffb454' : '';
+    const st = $('#hudState');
+    st.textContent = fault ? 'FAULT' : (running ? 'RUNNING' : 'STOPPED');
+    st.style.color = fault ? '#ff5d63' : (running ? '#54e6a1' : '#7e97aa');
+  }
+
+  animate = () => {
+    requestAnimationFrame(this.animate);
+    if (!this.dragging) this.yaw += 0.035 * 0.016;
+    const cp = Math.cos(this.pitch);
+    this.camera.position.set(
+      this.target.x + Math.sin(this.yaw) * cp * this.radius,
+      this.target.y + Math.sin(this.pitch) * this.radius,
+      this.target.z + Math.cos(this.yaw) * cp * this.radius
+    );
+    this.camera.lookAt(this.target);
+    this.renderer.render(this.scene, this.camera);
+  }
+}
+
+let twin = null;
+let mock = null;
+let line = null;
+let manifest = null;
+let mode = 'offline';
+let gatewayUrl = new URLSearchParams(location.search).get('ws') || 'ws://127.0.0.1:8765/ws';
+let gatewayToken = new URLSearchParams(location.search).get('token') || '';
+let plcTarget = null;
+let configuredSocket = false;
+let lastPlc = { state: 'unknown', message: '' };
+
+function lsKey(name) {
+  return 'tiaTwin.' + ((manifest && manifest.project) || 'default') + '.' + name;
+}
+
+function setControls(on) {
+  QS('[data-cmd]').forEach((b) => { b.disabled = !on; });
+}
+function showWait(text) {
+  $('#waitText').textContent = text;
+  $('#waitOverlay').classList.remove('hidden');
+}
+function hideWait() {
+  $('#waitOverlay').classList.add('hidden');
+}
+function setLink(text, kind = '') {
+  const el = $('#linkMsg');
+  el.textContent = text;
+  el.style.color = kind === 'error' ? '#ff5d63' : kind === 'ok' ? '#54e6a1' : '';
+}
+function setOnlineButton() {
+  const btn = $('#modeOnline');
+  btn.classList.toggle('connected', mode === 'online' && lastPlc.state === 'connected');
+}
+function setMode(next, openDialog = true) {
+  mode = next;
+  const offline = mode === 'offline';
+  $('#modeOffline').classList.toggle('active', offline);
+  $('#modeOnline').classList.toggle('active', !offline);
+  $('#modeOffline').setAttribute('aria-selected', String(offline));
+  $('#modeOnline').setAttribute('aria-selected', String(!offline));
+  $('#simPanel').classList.toggle('hidden', !offline);
+  setOnlineButton();
+  if (!twin) return;
+  if (offline) {
+    $('#dlg').close();
+    twin.useMock(mock);
+    line && (line.autoSensor = $('#autoSensor').checked, line.plcReady = true);
+    hideWait();
+    setControls(true);
+    setLink('离线仿真：可修改本地数据。');
+  } else {
+    twin.useMock(null);
+    line && (line.autoSensor = true, line.plcReady = false);
+    setControls(false);
+    showWait('输入 PLC 地址后连接');
+    setLink('输入 PLCSIM Advanced 虚拟 PLC 的 IP 地址。');
+    if (openDialog) $('#dlg').showModal();
+  }
+}
+
+function buildSimRows() {
+  const box = $('#simRows3D');
+  box.innerHTML = '';
+  manifest.tags.filter((t) => !t.id.startsWith('cmd.')).forEach((t) => {
+    const row = document.createElement('div');
+    row.className = 'sim-row3d';
+    row.dataset.tag = t.id;
+    const meta = document.createElement('div');
+    const name = document.createElement('div');
+    name.className = 'n'; name.textContent = t.desc || t.id;
+    const id = document.createElement('div');
+    id.className = 'i'; id.textContent = t.id;
+    meta.appendChild(name); meta.appendChild(id);
+    let input;
+    if (t.type === 'bool') {
+      input = document.createElement('input'); input.type = 'checkbox';
+      input.addEventListener('change', () => { if (mode === 'offline') mock.write(t.id, input.checked); });
+    } else {
+      input = document.createElement('input'); input.type = 'number';
+      input.step = t.type === 'real' ? '0.01' : '1';
+      input.addEventListener('change', () => {
+        if (mode !== 'offline') return;
+        const n = t.type === 'real' ? Number(input.value) : parseInt(input.value, 10);
+        if (Number.isFinite(n)) mock.write(t.id, n);
+      });
+    }
+    row.appendChild(meta); row.appendChild(input);
+    box.appendChild(row);
+  });
+}
+function updateSimRows() {
+  if (!twin) return;
+  manifest.tags.filter((t) => !t.id.startsWith('cmd.')).forEach((t) => {
+    const row = document.querySelector(`.sim-row3d[data-tag="${t.id}"]`);
+    if (!row) return;
+    const input = row.querySelector('input');
+    if (!input || document.activeElement === input) return;
+    const v = twin.get(t.id);
+    if (t.type === 'bool') input.checked = !!v;
+    else if (v !== undefined) input.value = v;
+  });
+}
+function sendPlcConfig() {
+  if (!plcTarget || mode !== 'online') return;
+  setControls(false);
+  showWait('正在连接 PLC…');
+  setLink('正在连接 ' + plcTarget.ip + ' …');
+  twin.configurePlc(plcTarget).catch((err) => {
+    configuredSocket = false;
+    setControls(false);
+    showWait('PLC 连接失败，请检查地址');
+    setLink('连接失败：' + err.message, 'error');
+  });
+}
+function connectPlc() {
+  const ip = $('#plcIp').value.trim();
+  if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(ip)) {
+    setLink('请输入正确的 IPv4 地址。', 'error');
+    return;
+  }
+  const rack = parseInt($('#plcRack').value, 10) || 0;
+  const slot = parseInt($('#plcSlot').value, 10);
+  plcTarget = { ip, rack, slot: Number.isFinite(slot) ? slot : 1 };
+  localStorage.setItem(lsKey('plcIp'), ip);
+  localStorage.setItem(lsKey('plcRack'), String(rack));
+  localStorage.setItem(lsKey('plcSlot'), String(plcTarget.slot));
+  lastPlc = { state: 'unknown', message: '' };
+  configuredSocket = false;
+  setControls(false);
+  showWait('正在连接 PLC…');
+  setLink('正在连接 ' + ip + ' …');
+  twin.url = gatewayUrl;
+  twin.token = gatewayToken;
+  if (twin.status === 'online') {
+    configuredSocket = true;
+    sendPlcConfig();
+  } else {
+    twin.connect();
+  }
+}
+
+async function boot() {
+  const params = new URLSearchParams(location.search);
+  manifest = await TiaTwin.loadManifest('./twin.manifest.json');
+  $('#title').textContent = manifest.title || manifest.project;
+  mock = new MockPlc3D(manifest);
+  $('#plcIp').value = localStorage.getItem(lsKey('plcIp')) || manifest.plc.ip || '192.168.0.1';
+  $('#plcRack').value = localStorage.getItem(lsKey('plcRack')) ?? manifest.plc.rack ?? 0;
+  $('#plcSlot').value = localStorage.getItem(lsKey('plcSlot')) ?? manifest.plc.slot ?? 1;
+  twin = await TiaTwin.create({ manifest, url: gatewayUrl, token: gatewayToken, mock });
+  buildSimRows();
+  line = new Line3D($('#stage'), twin);
+  twin.on('status', ({ state, error }) => {
+    if (mode !== 'online') return;
+    if (state === 'online' && plcTarget && !configuredSocket) {
+      configuredSocket = true;
+      sendPlcConfig();
+    } else if (state === 'offline') {
+      configuredSocket = false;
+      line && (line.plcReady = false);
+      setControls(false);
+      showWait('本地网关未连接');
+      setLink('本地网关未连接，请确认 run_twin.py 正在运行。', 'error');
+    } else if (state === 'connecting') {
+      showWait('正在连接本地网关…');
+    }
+  });
+  twin.on('plc', (p) => {
+    lastPlc = p || { state: 'unknown', message: '' };
+    setOnlineButton();
+    if (mode !== 'online') return;
+    if (lastPlc.state === 'connected') {
+      line && (line.plcReady = true);
+      hideWait(); setControls(true);
+      setLink('PLC 已连接，开始实时仿真。', 'ok');
+      if ($('#dlg').open) setTimeout(() => $('#dlg').close(), 500);
+    } else if (lastPlc.state === 'error') {
+      line && (line.plcReady = false);
+      setControls(false);
+      showWait('PLC 通信异常，请检查地址');
+      setLink('PLC 通信失败：' + (p.message || '检查地址、PUT/GET、非优化 DB'), 'error');
+    } else if (lastPlc.state === 'waiting') {
+      line && (line.plcReady = false);
+      showWait('正在连接 PLC…');
+      setLink(p.message || '正在连接 PLC…');
+    }
+  });
+  twin.on('values', () => updateSimRows());
+  twin.on('error', (e) => { if (mode === 'online') setLink('协议错误：' + (e.message || e.code), 'error'); });
+  QS('[data-cmd]').forEach((b) => b.addEventListener('click', () => twin.pulse(b.dataset.cmd, 150).catch((e) => setLink(e.message, 'error'))));
+  $('#modeOffline').addEventListener('click', () => { if (mode !== 'offline') setMode('offline'); });
+  $('#modeOnline').addEventListener('click', () => {
+    if (mode === 'online') { if (!$('#dlg').open) $('#dlg').showModal(); return; }
+    setMode('online', true);
+  });
+  $('#btnConnect').addEventListener('click', connectPlc);
+  $('#btnRetry').addEventListener('click', connectPlc);
+  $('#btnClose').addEventListener('click', () => $('#dlg').close());
+  $('#autoSensor').addEventListener('change', () => {
+    if (!line) return;
+    line.autoSensor = $('#autoSensor').checked;
+    if (line.autoSensor) line.lastSensor = line.lastFeedback = null;
+  });
+  setMode('offline', false);
+  updateSimRows();
+  if (params.has('debug')) window.__twin3d = { get twin() { return twin; }, get line() { return line; }, get mock() { return mock; } };
+}
+boot().catch((err) => {
+  console.error(err);
+  document.body.insertAdjacentHTML('beforeend', `<div style="position:fixed;inset:0;display:grid;place-items:center;background:#050d14;color:#ff9ca0;font:14px monospace;padding:24px;text-align:center;z-index:99">3D 页面启动失败：${err.message}<br>请通过 run_twin.py 或静态 HTTP 服务打开</div>`);
+});
+</script>
+</body>
+</html>

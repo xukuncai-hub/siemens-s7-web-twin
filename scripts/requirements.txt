@@ -1,0 +1,2 @@
+websockets>=15,<16
+python-snap7>=2.0

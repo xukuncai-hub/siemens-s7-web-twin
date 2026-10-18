@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>输送带分拣线 · 数字孪生</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark"></span>
+        <div>
+          <div class="kicker">DIGITAL TWIN / SORTING LINE</div>
+          <h1 id="projectTitle">输送带分拣线</h1>
+        </div>
+      </div>
+      <div class="mode-switch" role="tablist" aria-label="仿真模式">
+        <button id="modeOffline" class="mode-btn active" role="tab" aria-selected="true">离线仿真</button>
+        <button id="modeOnline" class="mode-btn" role="tab" aria-selected="false">连接 PLC</button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="stage-wrap">
+        <div class="stage-frame">
+          <canvas id="scene" width="1600" height="900" aria-label="输送带分拣线数字孪生画面"></canvas>
+          <div class="stage-tag"><span class="dot"></span> LINE 01 / SORTING</div>
+          <div class="hud">
+            <div class="hud-item"><span>COUNT</span><strong id="hudCount">0</strong></div>
+            <div class="hud-item"><span>PE1</span><strong id="hudPe">0</strong></div>
+            <div class="hud-item"><span>PUSHER</span><strong id="hudQ">0</strong></div>
+            <div class="hud-item wide"><span>STATE</span><strong id="hudState">STOPPED</strong></div>
+          </div>
+          <div id="waitOverlay" class="wait-overlay hidden">
+            <div class="spinner"></div>
+            <div id="waitText">正在连接 PLC…</div>
+            <button id="btnRetry" class="btn">重试</button>
+          </div>
+        </div>
+        <div class="stage-foot">
+          <span>SIMULATION ONLY — NOT A SAFETY DEVICE</span>
+          <span id="workspaceHint">离线仿真：可修改本地数据</span>
+        </div>
+      </section>
+
+      <aside class="sidebar">
+        <section class="panel">
+          <div class="panel-head"><h2>操作台</h2><span id="opState" class="mono">OFFLINE</span></div>
+          <div class="control-grid">
+            <button class="btn primary" data-cmd="cmd.start">启动</button>
+            <button class="btn" data-cmd="cmd.stop">停止</button>
+            <button class="btn" data-cmd="cmd.reset">复位</button>
+            <button class="btn danger" data-cmd="cmd.estop">急停</button>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div id="offlinePane">
+            <div class="panel-head"><h2>仿真数据</h2><span class="mono">LOCAL</span></div>
+            <label class="auto-row">
+              <input id="autoSensor" type="checkbox" checked>
+              <span>自动检测传感器 / 到位</span>
+            </label>
+            <div id="simRows" class="sim-rows"></div>
+            <p class="hint">修改立即作用于本地仿真，不会写入 PLC。</p>
+          </div>
+
+          <div id="onlinePane" class="hidden">
+            <div class="panel-head"><h2>连接 PLC</h2><span id="onlineState" class="mono">未连接</span></div>
+            <label class="field">PLC 地址
+              <input id="plcIp" spellcheck="false" placeholder="192.168.0.1">
+            </label>
+            <details class="advanced">
+              <summary>高级：Rack / Slot</summary>
+              <div class="field-row">
+                <label class="field">Rack
+                  <input id="plcRack" type="number" min="0" max="7" value="0">
+                </label>
+                <label class="field">Slot
+                  <input id="plcSlot" type="number" min="0" max="31" value="1">
+                </label>
+              </div>
+            </details>
+            <button id="btnPlcConnect" class="btn primary wide">连接 PLCSIM Advanced</button>
+            <p id="onlineMsg" class="hint">输入 PLCSIM Advanced 虚拟 PLC 的 IP 地址。网关由启动器在后台运行。</p>
+          </div>
+        </section>
+      </aside>
+    </main>
+
+    <footer class="footer">
+      <span id="footerProject">DIGITAL TWIN</span>
+      <span>SIMULATION ONLY · NOT A SAFETY DEVICE</span>
+    </footer>
+  </div>
+  <script src="tia-twin-client.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
