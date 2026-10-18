@@ -1,6 +1,6 @@
 # Siemens S7 Web Twin (S7comm: 真实硬件 PLC + PLCSIM)
 
-> **西门子真实硬件 PLC (S7-1200 / S7-1500 / S7-300) 与 PLCSIM Advanced 数字孪生产线协同开发规范与工具链**  
+> **西门子PLC (S7-1200 / S7-1500 / S7-300) 与 PLCSIM Advanced 数字孪生产线协同开发规范与工具链**  
 > *A standardized AI Skill & Toolkit bridging Web 2D/3D Digital Twins and Siemens S7 Hardware PLCs / PLCSIM Advanced via S7comm.*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
