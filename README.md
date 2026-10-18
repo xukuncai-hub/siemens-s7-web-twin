@@ -21,6 +21,10 @@
 
 * **双目标原生支持**：底层基于工业级 S7comm 协议（ISO-on-TCP，默认端口 102），一套代码**无缝支持真实西门子硬件 PLC 与虚拟 PLCSIM Advanced**。
 * **动静分离，纯信号驱动**：控制逻辑严格保留在 PLC 内部；网页只负责机构运动、光电传感器计算与实时展示。PLC 输出 1 则运动，0 则停止，严禁前端伪造虚假常转动画。
+* **通信扫描周期自由可调 (50ms / 100ms)**：
+  - **`50 ms (20 Hz · 高速响应)`**：机构物理孪生首选，气缸推拉、高速光电对射检测与碰撞几乎**零延迟**，动作丝滑顺畅。
+  - **`100 ms (10 Hz · 工业标准)`**：经典工业 SCADA / HMI 推荐节拍，网络通信包少，CPU 占用极低，对通信处理机（CP）最温和。
+  - **即切即生效**：网页顶部栏与连接弹窗均提供扫描周期下拉选择，左下角 HUD 实时显示通信周期，运行中动态切换无需重连。
 * **双模式开箱即用**：页面默认处于**离线仿真**（内置 Three.js 物理碰撞与 Mock 引擎，无需 PLC 即可单机演示）；点击“连接 PLC”即可热切换至**真实 S7 通信**。
 * **零环境依赖 / 绿色便携开箱即用**：脚手架自动内置 ~20MB 极简 Python 运行环境（预装 `snap7` 与 `websockets`），**现场目标工控机完全无需安装 Python、无需联网、无需配置环境变量、无需管理员权限**，拷贝即跑。
 * **零终端 / 无门槛交互**：完美规避 Windows 11 24H2 安全拦截与跨盘符虚拟环境陷阱，提供桌面图标一键直达，用户无需敲任何命令行。
@@ -93,20 +97,20 @@ graph LR
 ## 📂 目录结构
 
 ```text
-plcsim-web-twin/
-├── SKILL.md                          # AI Agent Skill 核心规范、12 大红线与标准 SOP
+siemens-s7-web-twin/
+├── SKILL.md                          # AI Agent Skill 核心规范、13 大红线与标准 SOP
 ├── README.md                         # 项目总体说明与快速指南
 ├── scripts/
-│   ├── make_project.py              # 一键脚手架：自动装配 2D/3D 孪生工程
-│   ├── tia_gateway.py               # WebSocket <-> S7comm (Snap7) / Mock 高性能网关
+│   ├── make_project.py              # 一键脚手架：自动装配 2D/3D 孪生工程与内置便携运行时
+│   ├── tia_gateway.py               # WebSocket <-> S7comm (Snap7) / Mock 高性能网关 (支持 50ms/100ms 动态扫描)
 │   ├── generate_scl.py              # 从 manifest 一键生成博途 SCL 外部源文件
 │   ├── validate_manifest.py         # 信号清单校验脚本 (地址对齐、重叠检测)
 │   ├── run_twin.py                  # 服务管理与浏览器自动唤起启动器
-│   ├── start.bat                    # Windows 原生无命令启动批处理 (纯 ASCII)
+│   ├── start.bat                    # Windows 极简启动器 (优先调用 ./runtime/ 绿色运行环境)
 │   ├── make_shortcut.bat            # 原生 PowerShell 桌面快捷方式生成器
 │   ├── start_silent.bat             # 后台静默启动器 (无黑窗口)
 │   ├── stop.bat                     # 后台服务一键终止脚本
-│   ├── start_twin.bat / .sh         # 标准启动脚本 (Win/Linux)
+│   ├── start_twin.bat / .sh         # 兼容启动脚本 (Win/Linux)
 │   ├── start_twin.desktop           # Linux 桌面图标双击启动
 │   ├── build_exe.bat                # Windows PyInstaller 打包脚本
 │   ├── desktop_app.py               # 独立桌面端控制入口
@@ -114,19 +118,20 @@ plcsim-web-twin/
 │   └── requirements.txt             # 运行依赖
 ├── assets/
 │   ├── runtime/
-│   │   └── tia-twin-client.js       # 前端零依赖标准客户端库
+│   │   ├── portable-runtime.zip     # 内置官方免安装极简 Python 3.11 运行时 (含 snap7/websockets)
+│   │   └── tia-twin-client.js       # 前端零依赖标准客户端库 (支持动态 poll.rate 扫描周期调度)
 │   ├── template/                    # 2D Canvas 经典产线模板工程
 │   │   ├── index.html / app.js / styles.css
 │   │   ├── twin.manifest.json
 │   │   └── gateway.config.json
 │   ├── three-demo/                  # 3D Three.js 现代化工业产线模板工程
-│   │   ├── index.html / app.js / styles.css
+│   │   ├── index.html / app.js / styles.css (含 50ms/100ms 扫描周期切换器)
 │   │   └── vendor/                  # 本地离线 Three.js 核心库 (OrbitControls 等)
 │   └── tia/
 │       └── TwinIO.scl               # 自动生成的博途非优化 DB1 外部源文件
 └── references/
-    ├── contract.md                  # tia-web-twin/1 WebSocket 通信协议规范
-    ├── deployment.md                # 部署与无终端方案说明 (含 Win11 24H2 避坑)
+    ├── contract.md                  # tia-web-twin/1 WebSocket 通信协议规范 (含 poll.rate)
+    ├── deployment.md                # 部署与无环境/无终端方案说明 (含 Win11 24H2 避坑与绿色便携包)
     └── tia-setup-guide.md           # 实体真实 PLC 与 PLCSIM Advanced 关键配置手册
 ```
 
@@ -144,8 +149,12 @@ plcsim-web-twin/
 * **放行 PUT/GET 通信**：打开 CPU 设备组态 -> **属性** -> **防护与安全** -> **连接机制** -> 勾选 **“允许来自远程对象的 PUT/GET 通信访问”**（真实 PLC 必勾！）。
 * **导入数据块**：将工程生成的 `TwinIO.scl` 加入博途“外部源文件”，右键点击 **“从源生成块”**。确认生成的 DB 为非优化数据块，编译并下载到 CPU，将 CPU 拨到 **RUN** 模式。
 
-### 3. 网页连接
-打开 3D 数字孪生页面，点击右上角 **“连接 PLC”**，选择机型（S7-1200/1500 为 Rack 0 Slot 1，S7-300 为 Rack 0 Slot 2），输入 IP 点击连接即可。
+### 3. 网页连接与扫描周期设置
+打开 3D 数字孪生页面：
+1. 点击右上角 **“连接 PLC”**；
+2. 选择目标机型（S7-1200/1500 默认 Rack 0 Slot 1，S7-300 默认 Rack 0 Slot 2）；
+3. 选择 **通信扫描周期**（高速物理孪生推荐 `50ms`，标准推荐 `100ms`）；
+4. 输入 PLC IP 点击连接即可实时双向闭环通讯。
 
 ---
 
@@ -160,8 +169,8 @@ plcsim-web-twin/
 ## 🤖 作为 AI Agent Skill 使用
 
 本工程遵循 Antigravity / Cursor / Claude Code / Qoder 的 Skill 规范，只需将此目录挂载至：
-* 全局配置：`~/.gemini/config/skills/plcsim-web-twin` 或 `~/.agents/skills/plcsim-web-twin`
-* 或工作区：`.agents/skills/plcsim-web-twin`
+* 全局配置：`~/.gemini/config/skills/siemens-s7-web-twin` 或 `~/.agents/skills/siemens-s7-web-twin`
+* 或工作区：`.agents/skills/siemens-s7-web-twin`
 
 AI 助手将自动理解机电拓扑契约，并在后台全自动完成 manifest 编写、SCL 生成与零命令脚手架搭建。
 
