@@ -42,9 +42,10 @@ python scripts/make_project.py --out ./my-line --scene 3d  # 3D 产线展示
 
 项目生成后直接交付用户，**全程无需敲任何命令**：
 
-- **Windows 用户（双击即用，0 终端输入）**：
+- **Windows 用户（双击即用，0 终端输入，0 环境依赖）**：
   - 双击 `start.bat`（或运行 `make_shortcut.bat` 一键在桌面生成专属图标）。
-  - （由于 Windows 11 24H2 彻底废弃了 VBScript 引擎，系统全面采用原生 PowerShell 隐藏模式创建桌面图标，告别 `.vbs` 缺失报错）。
+  - **内置免安装运行时**：脚手架自动内置 ~20MB 极简 Python 运行环境（内置 `snap7` 与 `websockets`），**现场目标工控机完全无需安装 Python、无需联网、无需管理员权限**，开箱即用。
+  - **Win11 24H2 兼容**：全面采用原生 PowerShell 隐藏模式与 7-bit ASCII 批处理，告别 `.vbs` 废弃与单文件 exe `%TEMP%` 解压拦截。
 - **Linux 用户**：双击 `start_twin.desktop`。
 
 ## 2. 硬性规则（不得绕过）
@@ -70,25 +71,25 @@ python scripts/make_project.py --out ./my-line --scene 3d  # 3D 产线展示
 
 ```text
 project/
+├── runtime/                    # 官方绿色免安装 Python 运行时（内置 snap7 与 websockets，开箱即用）
 ├── index.html                 # 孪生主页面（2D/3D 画布 + 双模式操作台）
 ├── app.js                     # 孪生场景机构动画、物理碰撞感应、状态同步
-├── styles.css                 # 2D 工业深色风格样式
+├── styles.css                 # 工业深色风格样式
 ├── tia-twin-client.js         # 固定浏览器 SDK，不要改动协议
 ├── twin.manifest.json         # 信号字典、多 DB 地址、bindings 契约
 ├── TwinIO.scl                 # 由 AI 自动生成好的 SCL 外部源文件（含中文注释）
-├── 双击启动.bat                # Windows 中文启动器（自动解决环境、静默拉起并开网页）
-├── 启动数字孪生(无黑框).vbs    # Windows 静默启动（完全不弹黑色终端黑框）
-├── 创建桌面快捷方式.bat        # 一键在用户 Windows 桌面上创建图标
-├── build_exe.bat              # Windows 单文件 exe 打包器（生成无需 Python 的独立程序）
-├── start_twin.bat             # 标准 Windows 启动器
+├── start.bat                  # Windows 极简启动器（优先使用 ./runtime/ 绿色环境，双击即用）
+├── start_silent.bat           # Windows 后台静默启动（PowerShell Hidden 模式，完全无黑框）
+├── make_shortcut.bat          # 一键在用户 Windows 桌面上创建图标
+├── stop.bat                   # 一键干净终止所有后台常驻服务进程
+├── start_twin.bat             # Windows 兼容启动器
 ├── start_twin.sh              # Linux 启动脚本
 ├── start_twin.desktop         # Linux 桌面图标双击启动
-├── desktop_app.py             # 独立桌面版 GUI 壳（配合 PyInstaller 打包）
-├── tia_twin.spec              # PyInstaller 打包配置
 ├── tia_gateway.py             # 本地 S7comm / WebSocket 网关
+├── run_twin.py                # 网关 + HTTP 协同启动调度器
 ├── validate_manifest.py       # 契约规则自动校验器
 ├── generate_scl.py            # 多 DB SCL 自动生成器
-├── requirements.txt           # Python 依赖
+├── requirements.txt           # Python 依赖清单
 ├── gateway.config.json        # 网关本地端口与默认配置
 └── vendor/                    # 3D 模板本地 Three.js 依赖（无 CDN 纯离线）
 ```

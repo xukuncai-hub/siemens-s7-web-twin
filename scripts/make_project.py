@@ -18,6 +18,7 @@ from pathlib import Path
 SKILL = Path(__file__).resolve().parents[1]
 TEMPLATE = SKILL / "assets" / "template"
 RUNTIME = SKILL / "assets" / "runtime" / "tia-twin-client.js"
+PORTABLE_RUNTIME_ZIP = SKILL / "assets" / "runtime" / "portable-runtime.zip"
 THREE_DEMO = SKILL / "assets" / "three-demo"
 SCRIPTS = ["tia_gateway.py", "validate_manifest.py", "generate_scl.py", "run_twin.py", "requirements.txt"]
 LAUNCHERS = [
@@ -77,6 +78,14 @@ def main() -> int:
         shutil.copy2(SKILL / "scripts" / name, out / name)
     for name in PACKAGING:
         shutil.copy2(SKILL / "scripts" / name, out / name)
+    if PORTABLE_RUNTIME_ZIP.exists():
+        import zipfile
+        rt_target = out / "runtime"
+        if not rt_target.exists():
+            print("正在内置免安装绿色 Python 运行时 (runtime/)...")
+            rt_target.mkdir(parents=True, exist_ok=True)
+            with zipfile.ZipFile(PORTABLE_RUNTIME_ZIP, "r") as zf:
+                zf.extractall(rt_target)
     try:
         os.chmod(out / "start_twin.sh", 0o755)
     except OSError:
@@ -128,14 +137,12 @@ def main() -> int:
     cfg_path.write_text(json.dumps(cfg, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     print(f"项目已生成：{out}  ({args.scene.upper()} 场景)")
-    print("\n下一步：")
+    print("\n下一步（零环境门槛交付）：")
     print(f"  打开文件夹：{out}")
-    print("  Windows：双击 start_twin.bat")
-    print("  Linux：双击 start_twin.desktop（首次可能需允许执行）")
-    print("\n首次启动会自动创建环境并安装依赖，之后会自动打开页面；不需要敲命令。")
-    print("页面默认离线仿真，点“连接 PLC”输入 IP 即可联调。")
-    print("\n无终端部署（Windows）：在构建机双击 build_exe.bat 生成 dist/TIAWebTwin.exe；")
-    print("把 exe 发给用户，之后双击 exe 即可，无需 Python 或终端。")
+    print("  Windows：双击 start.bat 或运行 make_shortcut.bat 创建桌面快捷方式")
+    print("  （已内置 20MB 绿色便携 Python 运行时，目标电脑无需安装 Python、无需网络、无需管理员权限）")
+    print("  Linux：双击 start_twin.desktop 或运行 ./start_twin.sh")
+    print("\n双击脚本会自动拉起后台网关与 3D 页面；页面右上角输入 PLC IP 点击连接即可联调。")
     return 0
 
 
