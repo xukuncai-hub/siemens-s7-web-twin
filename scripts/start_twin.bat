@@ -10,6 +10,11 @@ echo   Close this window to stop.
 echo ==============================================
 echo.
 
+if exist "%~dp0runtime\python.exe" (
+  set "PY=%~dp0runtime\python.exe"
+  goto run
+)
+
 set "PY="
 for /f "delims=" %%I in ('where python 2^>nul') do (
   echo %%I | findstr /i /v "WindowsApps" >nul

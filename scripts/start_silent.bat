@@ -2,6 +2,11 @@
 setlocal
 cd /d "%~dp0"
 
+if exist "%~dp0runtime\python.exe" (
+  set "PY=%~dp0runtime\python.exe"
+  goto launch
+)
+
 set "PY="
 for /f "delims=" %%I in ('where python 2^>nul') do (
   echo %%I | findstr /i /v "WindowsApps" >nul
@@ -10,6 +15,8 @@ for /f "delims=" %%I in ('where python 2^>nul') do (
   )
 )
 if not defined PY set "PY=python"
+
+:launch
 
 powershell -NoProfile -Command "Start-Process -FilePath '%PY%' -ArgumentList 'run_twin.py --no-browser' -WorkingDirectory '%~dp0' -WindowStyle Hidden"
 

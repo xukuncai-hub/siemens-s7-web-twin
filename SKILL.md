@@ -325,7 +325,7 @@ python tia_gateway.py --config gateway.config.json --wait-plc
     - 现象：在非系统盘（如 D: 盘）工程目录下执行 `python -m venv .venv` 创建虚拟环境后，调用 `import snap7` 会报：
       `ImportError: DLL load failed while importing _ctypes: 动态链接库(DLL)初始化失败`，导致网页弹出“缺少 python-snap7”。而在宿主机 C 盘全局 Python 直接运行却 100% 正常。
     - 原理：Windows Loader 跨盘符加载 C 运行时动态库和 `libffi-8.dll` 时入口点（DllMain）返回失败。
-    - 规则：**启动器优先直接复用宿主机真实的 Python 3.10+**；若缺少依赖，则通过阿里镜像源安装至环境。切勿在非系统盘强行创建隔离 `.venv`，避免底层跨盘符 DLL 冲突。
+    - 规则：启动器优先检测本地绿色便携包（`runtime\python.exe`），若无则直接复用宿主机真实的 Python 3.10+。切勿在非系统盘强行创建隔离 `.venv`，避免底层跨盘符 DLL 冲突。
 
 11. **双目标支持：真实西门子硬件 PLC 与 PLCSIM Advanced 仿真器并重**：
     - **网络层等价性**：西门子实体 PLC（S7-1200 / S7-1500 / S7-300）与虚拟仿真器（PLCSIM Advanced）在网络底层都是西门子工业以太网原生协议 **S7comm（ISO-on-TCP，默认端口 102）**。网关基于 `snap7`，本就是工业级真实硬件直连库。
@@ -344,6 +344,28 @@ python tia_gateway.py --config gateway.config.json --wait-plc
     - **零外部 CDN 依赖**：本地提供 Three.js（`vendor/three.module.min.js` 与 `OrbitControls.js`），保证无网环境下也能 100% 渲染。
     - **机械与传感器三要素**：分段动力皮带、气动推杆/阻挡气缸、对射光电 PE 动态激光束（被工件遮挡时光束截断并变红）。
     - **动静分离与信号闭环**：输送带滚筒与气缸推拉**100% 响应 PLC 真实回传的 DO 输出**，PLC 输出 1 则运动，0 则停止，严禁前端伪造常转动画；工件到位时自动向 PLC 写入 DI。
+
+13. **现场工控机零 Python 环境交付准则（绿色便携 Runtime 与多终端方案）**：
+    - **痛点认知**：“跑脚本不用 Python 吗？客户电脑/现场工控机完全没有 Python 怎么办？”
+    - **架构事实**：
+      - 前端 3D 渲染与控制台运行在浏览器中，**100% 不需要 Python**。
+      - 但西门子 S7comm 是底层的 TCP 102 端口，现代浏览器出于安全沙箱限制**禁止直接建立原生 TCP Socket**，必须由本地网关将 S7comm 转换为 WebSocket 喂给前端。
+      - 因此负责与 PLC 握手的网关服务机确实需要一个执行引擎。
+    - **工业级零环境门槛交付三大规范**：
+      1. **绿色便携包（Python Embeddable / Portable Runtime）—— ⭐️ 工业现场最推荐**：
+         - 项目根目录可自带官方绿色免安装 Python（放入 `runtime/` 文件夹，解压后仅约 20MB，内置 `python-snap7` 与 `websockets`）。
+         - 所有启动脚本（`start.bat`、`start_silent.bat`）已内置自愈检测逻辑，**第一优先级寻找 `./runtime/python.exe`**：
+           ```bat
+           if exist "%~dp0runtime\python.exe" (
+             set "PY=%~dp0runtime\python.exe"
+             goto run
+           )
+           ```
+         - **客户体验**：拷到现场纯净工控机上，插上 U 盘直接双击，**目标电脑无 Python、无网络、无管理员权限均可一秒起飞**。
+      2. **PyInstaller `--onedir` 独立文件夹**：
+         - 打包成独立可执行文件夹 `dist/TIAWebTwin/`（严禁 Win11 24H2 拦截的 `--onefile`），双击 exe 启动，对客户完全隐藏脚本。
+      3. **B/S 纯客户端访问（车间平板 / 手机 / 远程工位）**：
+         - 网关只需在连接 PLC 的一台工控机上运行，其他工位电脑、车间平板**无需运行任何脚本、无需安装任何环境**，直接浏览器输入 `http://工控机IP:8000` 即可实时监控与交互。
 
 ## 9. AI Agent 交付规范与最终回复模板 (Agent Delivery Response Standard)
 
