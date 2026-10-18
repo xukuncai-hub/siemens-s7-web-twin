@@ -104,6 +104,41 @@ h1 {
   gap: 10px;
 }
 
+.cycle-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: 6px;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+.cycle-label {
+  font-size: 11px;
+  color: var(--dim);
+  white-space: nowrap;
+}
+
+.cycle-select {
+  background: rgba(10, 29, 41, 0.85);
+  border: 1px solid var(--line);
+  color: var(--cyan);
+  font: 600 12px var(--mono);
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.cycle-select:hover, .cycle-select:focus {
+  border-color: var(--cyan);
+  box-shadow: 0 0 10px rgba(61, 214, 245, 0.3);
+}
+
 .mode-switch {
   display: inline-flex;
   padding: 3px;

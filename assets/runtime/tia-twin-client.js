@@ -262,6 +262,9 @@
       } else if (msg.type === 'pong') {
         if (msg.echo) this.latencyMs = Math.max(0, Date.now() - msg.echo);
         this._emit('latency', this.latencyMs);
+      } else if (msg.type === 'rate_changed') {
+        this.pollHz = msg.pollHz;
+        this._emit('rate', { pollHz: msg.pollHz, intervalMs: msg.intervalMs });
       }
     }
 
@@ -294,6 +297,22 @@
     configurePlc(config) {
       if (this._mockMode) return Promise.reject(new Error('本地模拟模式不能配置 PLC'));
       return this._request('plc.configure', config, 12000);
+    }
+
+    setPollRate(hz) {
+      const freq = Math.max(1, Math.min(50, parseInt(hz, 10) || 10));
+      this.pollHz = freq;
+      if (this._mockMode) {
+        if (this.mock && typeof this.mock.setPollRate === 'function') {
+          this.mock.setPollRate(freq);
+        }
+        this._emit('rate', { pollHz: freq, intervalMs: Math.round(1000 / freq) });
+        return Promise.resolve({ type: 'ack', ok: true, pollHz: freq, intervalMs: Math.round(1000 / freq), mock: true });
+      }
+      return this._request('poll.rate', { pollHz: freq }).then((res) => {
+        this._emit('rate', { pollHz: freq, intervalMs: Math.round(1000 / freq) });
+        return res;
+      });
     }
 
     write(tag, value) {

@@ -31,6 +31,14 @@
       </div>
     </div>
     <div class="top-right">
+      <div class="cycle-picker">
+        <span class="cycle-label">扫描周期:</span>
+        <select id="topScanCycle" class="cycle-select" title="设置上位机与 PLC 的通信轮询扫描周期">
+          <option value="20">50 ms (20Hz)</option>
+          <option value="10" selected>100 ms (10Hz)</option>
+          <option value="5">200 ms (5Hz)</option>
+        </select>
+      </div>
       <div class="mode-switch" role="tablist">
         <button id="modeOffline" class="mode-btn active" role="tab" aria-selected="true">离线仿真</button>
         <button id="modeOnline" class="mode-btn" role="tab" aria-selected="false">连接 PLC</button>
@@ -51,6 +59,10 @@
     <div class="hud-item">
       <span>推料气缸</span>
       <strong id="hudQ">0</strong>
+    </div>
+    <div class="hud-item">
+      <span>扫描周期</span>
+      <strong id="hudCycle">100ms</strong>
     </div>
     <div class="hud-item">
       <span>系统状态</span>
@@ -195,6 +207,13 @@
         <input id="plcSlot" type="number" min="0" max="31" value="1">
       </div>
     </div>
+
+    <label>通信扫描周期 (Scan Cycle)</label>
+    <select id="dlgScanCycle" class="dlg-select">
+      <option value="20">50 ms (20 Hz · 高速响应 / 实时孪生)</option>
+      <option value="10" selected>100 ms (10 Hz · 工业标准推荐 / 均衡负载)</option>
+      <option value="5">200 ms (5 Hz · 低负载节能模式)</option>
+    </select>
     
     <div class="dlg-tips">
       <strong>真实 PLC 硬件必查清单：</strong>

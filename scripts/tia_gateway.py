@@ -520,6 +520,15 @@ class Gateway:
 
                 self.pulse_tasks[tag.id] = asyncio.create_task(off())
                 await self._send(websocket, {"type": "ack", "id": mid, "tag": tag.id, "ok": True, "pulseMs": ms})
+            elif mtype in ("set_rate", "rate.set", "poll.rate"):
+                hz = int(msg.get("pollHz", 10))
+                if 1 <= hz <= 50:
+                    self.poll_hz = hz
+                    LOG.info("Polling rate updated: %d Hz (interval %d ms)", hz, int(1000 / hz))
+                    await self._broadcast({"type": "rate_changed", "pollHz": self.poll_hz, "intervalMs": int(1000 / self.poll_hz)})
+                    await self._send(websocket, {"type": "ack", "id": mid, "ok": True, "pollHz": self.poll_hz, "intervalMs": int(1000 / self.poll_hz)})
+                else:
+                    raise ProtocolError("BAD_VALUE", f"pollHz 必须在 1..50 之间，收到: {hz}")
             else:
                 raise ProtocolError("BAD_MESSAGE", f"未知消息类型 {mtype!r}")
         except ProtocolError as exc:
@@ -542,6 +551,13 @@ class Gateway:
         slot = int(msg.get("slot", 1))
         if not 0 <= rack <= 7 or not 0 <= slot <= 31:
             raise ProtocolError("BAD_VALUE", "rack/slot 超出范围")
+        if "pollHz" in msg:
+            try:
+                hz = int(msg["pollHz"])
+                if 1 <= hz <= 50:
+                    self.poll_hz = hz
+            except (ValueError, TypeError):
+                pass
         new_backend = S7Backend(self.manifest, {"ip": str(ip), "rack": rack, "slot": slot})
         async with self.backend_lock:
             old = self.backend
@@ -552,11 +568,11 @@ class Gateway:
                 await old.close()
             except Exception:
                 pass
-        LOG.info("PLC target configured: %s rack=%s slot=%s", ip, rack, slot)
+        LOG.info("PLC target configured: %s rack=%s slot=%s pollHz=%s", ip, rack, slot, self.poll_hz)
         await self._broadcast({"type": "status", "plc": "waiting",
                                "message": f"正在连接 PLC {ip}…", "ts": time.time()})
         await self._send(websocket, {"type": "ack", "id": mid, "ok": True,
-                                     "plc": {"ip": str(ip), "rack": rack, "slot": slot}})
+                                     "plc": {"ip": str(ip), "rack": rack, "slot": slot}, "pollHz": self.poll_hz})
 
     def _require_tag(self, tid) -> Tag:
         if not isinstance(tid, str) or tid not in self.manifest.tags:
@@ -564,8 +580,9 @@ class Gateway:
         return self.manifest.tags[tid]
 
     async def poll_loop(self):
-        interval = 1.0 / self.poll_hz
         while True:
+            interval = 1.0 / max(1, self.poll_hz)
+            t0 = time.monotonic()
             try:
                 async with self.backend_lock:
                     values = await self.backend.read_all()
@@ -600,7 +617,9 @@ class Gateway:
                         LOG.warning("backend error: %s", st["message"])
                         await self._broadcast({"type": "status", "plc": st["state"], "message": st["message"], "ts": time.time()})
                 self.latest = {}
-            await asyncio.sleep(interval)
+            elapsed = time.monotonic() - t0
+            sleep_time = max(0.002, interval - elapsed)
+            await asyncio.sleep(sleep_time)
 
     async def _broadcast(self, payload: dict):
         if not self.clients:

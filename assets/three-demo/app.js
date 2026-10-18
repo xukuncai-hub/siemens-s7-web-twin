@@ -810,6 +810,18 @@ function setMode(nextMode, openModal = true) {
   }
 }
 
+function updateScanCycle(hz, sendToGateway = true) {
+  const cycleHz = Math.max(1, Math.min(50, parseInt(hz, 10) || 10));
+  const intervalMs = Math.round(1000 / cycleHz);
+  if ($('#topScanCycle')) $('#topScanCycle').value = String(cycleHz);
+  if ($('#dlgScanCycle')) $('#dlgScanCycle').value = String(cycleHz);
+  if ($('#hudCycle')) $('#hudCycle').textContent = `${intervalMs}ms`;
+  localStorage.setItem('tiaTwin.scanCycle', String(cycleHz));
+  if (sendToGateway && twin) {
+    twin.setPollRate(cycleHz).catch((e) => console.warn('setPollRate failed:', e));
+  }
+}
+
 function connectToPlc() {
   const ip = $('#plcIp').value.trim();
   if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(ip)) {
@@ -819,14 +831,16 @@ function connectToPlc() {
   const model = $('#plcModel')?.value || 's7-1200_1500';
   const rack = parseInt($('#plcRack').value, 10) || 0;
   const slot = parseInt($('#plcSlot').value, 10) || 1;
+  const pollHz = parseInt($('#dlgScanCycle')?.value || $('#topScanCycle')?.value, 10) || 10;
 
-  plcTarget = { ip, rack, slot };
+  plcTarget = { ip, rack, slot, pollHz };
   localStorage.setItem('tiaTwin.plcIp', ip);
   localStorage.setItem('tiaTwin.plcModel', model);
   localStorage.setItem('tiaTwin.plcRack', rack);
   localStorage.setItem('tiaTwin.plcSlot', slot);
+  localStorage.setItem('tiaTwin.scanCycle', String(pollHz));
 
-  showWait(`正在连接 S7 PLC (${ip}, Rack ${rack}/Slot ${slot})…`);
+  showWait(`正在连接 S7 PLC (${ip}, Rack ${rack}/Slot ${slot}, ${Math.round(1000 / pollHz)}ms)…`);
   twin.url = gatewayUrl;
   twin.token = gatewayToken;
 
@@ -900,6 +914,18 @@ async function boot() {
       showWait('正在建立 S7comm 握手…');
     }
   });
+
+  // 扫描周期变化事件
+  twin.on('rate', ({ pollHz, intervalMs }) => {
+    updateScanCycle(pollHz, false);
+  });
+
+  const savedCycle = localStorage.getItem('tiaTwin.scanCycle') || '10';
+  updateScanCycle(savedCycle, false);
+
+  // 扫描周期切换事件（顶部栏与弹窗联动）
+  $('#topScanCycle')?.addEventListener('change', (e) => updateScanCycle(e.target.value, true));
+  $('#dlgScanCycle')?.addEventListener('change', (e) => updateScanCycle(e.target.value, true));
 
   // 按钮交互
   QS('[data-cmd]').forEach((btn) => {

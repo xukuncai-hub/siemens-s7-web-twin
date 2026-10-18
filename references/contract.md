@@ -135,7 +135,29 @@
 
 随后网关广播 `status: waiting`，再根据连接结果广播 `connected` 或 `error`。网关启动时可为 `pending` 后端（`--wait-plc`），在收到本消息前不尝试连接 PLC。`mock` 后端拒绝本消息。
 
-### 3.6 ping
+### 3.6 poll.rate（动态修改通信扫描周期）
+
+页面可在运行中或连接时动态调整与 PLC 的通信扫描周期（50ms / 100ms / 200ms）：
+
+```json
+{ "type": "poll.rate", "id": "w5", "pollHz": 20 }
+```
+
+- `pollHz = 20` ➔ 扫描周期 50 ms（高速响应，快速气缸/光电孪生推荐）
+- `pollHz = 10` ➔ 扫描周期 100 ms（工业标准推荐，均衡网络与 CPU 负载）
+- `pollHz = 5` ➔ 扫描周期 200 ms（低负载节能模式）
+
+成功应答：
+```json
+{ "type": "ack", "id": "w5", "ok": true, "pollHz": 20, "intervalMs": 50 }
+```
+
+同时向所有在线客户端广播：
+```json
+{ "type": "rate_changed", "pollHz": 20, "intervalMs": 50 }
+```
+
+### 3.7 ping
 
 ```json
 { "type": "ping", "ts": 1713438002.500 }
