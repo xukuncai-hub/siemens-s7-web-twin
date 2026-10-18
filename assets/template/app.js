@@ -174,8 +174,10 @@
       this.boxes = this.boxes.filter((b) => !(b.mode === 'fall' && b.y > 760) && b.x < 1400);
 
       const prevSensor = this.sensor;
+      const boxBlocking = this.boxes.some((b) => b.mode === 'belt' && Math.abs(b.x - 800) < 28);
+      this.boxSensor = boxBlocking;
       if (this.autoSensor) {
-        this.sensor = this.boxes.some((b) => b.mode === 'belt' && Math.abs(b.x - 800) < 24);
+        this.sensor = boxBlocking || !!this.twin.get('sensor.pe1');
       } else {
         this.sensor = !!this.twin.get('sensor.pe1');
       }
@@ -196,20 +198,25 @@
       if (ext !== this.feedback) this.feedback = ext;
 
       this.syncIn += dt;
-      if (this.syncIn >= 0.1) {
+      if (this.syncIn >= 0.05) {
         this.syncIn = 0;
         this.syncBits();
       }
     }
 
     syncBits() {
-      if (!this.autoSensor || !this.plcReady) return;
-      const patch = {};
-      if (this.lastSensor !== this.sensor) { this.lastSensor = this.sensor; patch['sensor.pe1'] = this.sensor; }
-      if (this.lastFeedback !== this.feedback) { this.lastFeedback = this.feedback; patch['cyl.extended'] = this.feedback; }
-      if (!Object.keys(patch).length) return;
-      if (this.twin.status !== 'mock' && this.twin.status !== 'online') return;
-      this.twin.writeMany(patch).catch(() => {});
+      if (!this.autoSensor) return;
+      if (this.lastBoxSensor !== this.boxSensor) {
+        this.lastBoxSensor = this.boxSensor;
+        if (mode === 'offline' && mockPlc) {
+          mockPlc.write('sensor.pe1', this.boxSensor);
+        } else if (mode === 'online' && this.twin && lastPlc.state === 'connected') {
+          // 现场光电传感器检测到物料/离开，向 PLC 发送输入信号
+          this.twin.write('sensor.pe1', this.boxSensor).catch((err) => {
+            console.warn('[Sensor] PE1 write to PLC failed:', err);
+          });
+        }
+      }
     }
 
     rr(x, y, w, h, r) {
@@ -597,6 +604,93 @@
     });
   }
 
+  function createTagRow(t, isInput) {
+    const row = document.createElement('div');
+    row.className = 'sim-row';
+    row.dataset.tag = t.id;
+    const meta = document.createElement('div');
+    meta.className = 'sim-meta';
+    const name = document.createElement('div');
+    name.className = 'sim-name';
+    name.textContent = t.desc || t.id;
+    const id = document.createElement('div');
+    id.className = 'sim-id';
+    id.textContent = `${t.address} · ${t.id} (${t.type})`;
+    meta.appendChild(name); meta.appendChild(id);
+    const ctl = document.createElement('div');
+    ctl.className = 'sim-control';
+    ctl.style.display = 'flex';
+    ctl.style.alignItems = 'center';
+    ctl.style.gap = '6px';
+    const val = document.createElement('span');
+    val.className = 'tag-val none';
+    val.textContent = '—';
+    ctl.appendChild(val);
+    if (isInput) {
+      const btn = document.createElement('button');
+      btn.className = 'btn-micro';
+      btn.textContent = '发脉冲⚡';
+      btn.title = `向 PLC 发送 ${t.address} 脉冲信号`;
+      btn.addEventListener('click', () => pulseCommand(t.id));
+      ctl.appendChild(btn);
+    }
+    row.appendChild(meta); row.appendChild(ctl);
+    return row;
+  }
+
+  function buildOnlineTagRows() {
+    const box = $('#onlineTagRows');
+    if (!box || !manifest) return;
+    box.innerHTML = '';
+
+    const inputTags = manifest.tags.filter((t) => t.id.startsWith('cmd.') || t.id.startsWith('sensor.'));
+    const outputTags = manifest.tags.filter((t) => !t.id.startsWith('cmd.') && !t.id.startsWith('sensor.'));
+
+    // 现场输入 ➔ PLC
+    const headerIn = document.createElement('div');
+    headerIn.className = 'tag-group-title';
+    headerIn.innerHTML = '<span>📥 现场输入 ➔ PLC (DI)</span><span class="tag-badge">外部发信号</span>';
+    box.appendChild(headerIn);
+
+    inputTags.forEach((t) => {
+      box.appendChild(createTagRow(t, true));
+    });
+
+    // PLC 输出 ➔ 现场
+    const headerOut = document.createElement('div');
+    headerOut.className = 'tag-group-title out';
+    headerOut.innerHTML = '<span>📤 PLC 输出 ➔ 现场 (DO)</span><span class="tag-badge">PLC 控制</span>';
+    box.appendChild(headerOut);
+
+    outputTags.forEach((t) => {
+      box.appendChild(createTagRow(t, false));
+    });
+  }
+
+  function updateOnlineTagRows() {
+    if (!twin || !manifest) return;
+    manifest.tags.forEach((t) => {
+      const row = document.querySelector(`#onlineTagRows .sim-row[data-tag="${t.id}"]`);
+      if (!row) return;
+      const valEl = row.querySelector('.tag-val');
+      if (!valEl) return;
+      const v = twin.get(t.id);
+      if (v === undefined || v === null) {
+        valEl.className = 'tag-val none';
+        valEl.textContent = '— (未提供)';
+      } else if (t.type === 'bool') {
+        valEl.className = v ? 'tag-val bool-true' : 'tag-val bool-false';
+        valEl.textContent = v ? 'TRUE (1)' : 'FALSE (0)';
+      } else if (t.type === 'real') {
+        valEl.className = 'tag-val';
+        valEl.textContent = Number(v).toFixed(2);
+      } else {
+        valEl.className = 'tag-val';
+        valEl.textContent = String(v);
+      }
+    });
+  }
+
   function updateSimRows() {
     if (!twin) return;
     manifest.tags.filter((t) => !t.id.startsWith('cmd.')).forEach((t) => {
@@ -608,6 +702,7 @@
       if (t.type === 'bool') input.checked = !!v;
       else if (v !== undefined && document.activeElement !== input) input.value = v;
     });
+    updateOnlineTagRows();
   }
 
   function updateHud() {
@@ -625,6 +720,12 @@
     const st = $('#hudState');
     st.textContent = fault ? 'FAULT' : (running ? 'RUNNING' : 'STOPPED');
     st.style.color = fault ? '#ff5d63' : (running ? '#54e6a1' : '#7f97aa');
+
+    const peLabel = $('#pe1StateLabel');
+    if (peLabel) {
+      peLabel.textContent = pe ? 'PE1: 1 (触发)' : 'PE1: 0 (正常)';
+      peLabel.style.color = pe ? '#ff5d63' : 'var(--dim)';
+    }
   }
 
   function setMode(next) {
@@ -649,11 +750,21 @@
       setOnlineMsg('输入 PLCSIM Advanced 虚拟 PLC 的 IP 地址。');
     } else {
       twin.useMock(null);
-      if (scene) { scene.autoSensor = true; scene.plcReady = false; }
+      twin.values = {};
+      if (scene) {
+        scene.boxes = [];
+        scene.pusher = 0;
+        scene.sensor = false;
+        scene.feedback = false;
+        scene.autoSensor = $('#autoSensorOnline') ? $('#autoSensorOnline').checked : true;
+        scene.plcReady = false;
+      }
       setControls(false);
       setOnlineState('未连接');
       setOnlineMsg('输入 PLC 地址后点击连接。');
       showWait('输入 PLC 地址后连接');
+      updateSimRows();
+      updateHud();
     }
   }
 
@@ -707,8 +818,9 @@
     const now = performance.now();
     if (now - commandGuard < 220) return;
     commandGuard = now;
+    const pulseMs = cmd === 'sensor.pe1' ? 300 : 150;
     try {
-      await twin.pulse(cmd, 150);
+      await twin.pulse(cmd, pulseMs);
     } catch (err) {
       setOnlineMsg('命令失败：' + err.message, 'error');
     }
@@ -726,6 +838,29 @@
         if (scene.autoSensor) scene.forceSync();
       }
     });
+    const autoOnline = $('#autoSensorOnline');
+    if (autoOnline) {
+      autoOnline.addEventListener('change', () => {
+        if (scene && mode === 'online') {
+          scene.autoSensor = autoOnline.checked;
+          if (scene.autoSensor) scene.forceSync();
+        }
+      });
+    }
+    const sceneCanvas = $('#scene');
+    if (sceneCanvas) {
+      sceneCanvas.addEventListener('click', (ev) => {
+        const rect = sceneCanvas.getBoundingClientRect();
+        const scaleX = 1600 / rect.width;
+        const scaleY = 900 / rect.height;
+        const cx = (ev.clientX - rect.left) * scaleX;
+        const cy = (ev.clientY - rect.top) * scaleY;
+        // 点击 PE1 传感器区域 (x=800, y: 460~710)
+        if (Math.abs(cx - 800) < 40 && cy >= 460 && cy <= 710) {
+          pulseCommand('sensor.pe1');
+        }
+      });
+    }
     const savedIp = localStorage.getItem(lsKey('plcIp'));
     const savedRack = localStorage.getItem(lsKey('plcRack'));
     const savedSlot = localStorage.getItem(lsKey('plcSlot'));
@@ -763,12 +898,17 @@
       setOpState();
       if (mode !== 'online') return;
       if (lastPlc.state === 'connected') {
-        if (scene) scene.plcReady = true;
+        if (scene) {
+          scene.plcReady = true;
+          scene.autoSensor = $('#autoSensorOnline') ? $('#autoSensorOnline').checked : true;
+        }
         hideWait();
         setControls(true);
         $('#workspaceHint').textContent = '在线模式：PLC 已连接';
         setOnlineState('已连接', 'ok');
-        setOnlineMsg(plc.message === 'mock backend' ? 'PLC 已连接。' : 'PLC 已连接，开始实时仿真。', 'ok');
+        setOnlineMsg('PLC 已连接。', 'ok');
+        const badge = $('#onlineMonitorBadge');
+        if (badge) { badge.textContent = 'ONLINE'; badge.style.color = '#54e6a1'; }
       } else if (lastPlc.state === 'error') {
         if (scene) scene.plcReady = false;
         showWait('PLC 通信异常，请检查地址');
@@ -806,6 +946,7 @@
       mockPlc = new MockPlc(manifest);
       twin = await TiaTwin.create({ manifest, url: gatewayUrl, token: gatewayToken, mock: mockPlc });
       buildSimRows();
+      buildOnlineTagRows();
       wireUI();
       attachEvents();
       setMode('offline');

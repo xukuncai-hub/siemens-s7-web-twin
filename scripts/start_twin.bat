@@ -1,53 +1,60 @@
 @echo off
-chcp 65001 >/dev/null
 setlocal
 cd /d "%~dp0"
 title TIA Web Twin
+
 echo ==============================================
 echo   TIA Web Twin
-echo   关闭此窗口即停止网页与本地网关
+echo   Starting local services...
+echo   Close this window to stop.
 echo ==============================================
 echo.
 
 set "PY="
-where py >/dev/null 2>/dev/null
-if not errorlevel 1 set "PY=py -3"
+for /f "delims=" %%I in ('where python 2^>nul') do (
+  echo %%I | findstr /i /v "WindowsApps" >nul
+  if not errorlevel 1 (
+    if not defined PY set "PY=%%I"
+  )
+)
+
 if not defined PY (
-  where python >/dev/null 2>/dev/null
+  where py >nul 2>nul
+  if not errorlevel 1 set "PY=py -3"
+)
+
+if not defined PY (
+  where python >nul 2>nul
   if not errorlevel 1 set "PY=python"
 )
+
 if not defined PY (
-  echo 未找到 Python。请先安装 Python 3.10+（安装时勾选 Add Python to PATH）。
+  echo [ERROR] Python not found. Please install Python 3.10+.
   pause
   exit /b 1
 )
 
-if not exist ".venv\Scripts\python.exe" (
-  echo 首次启动：正在创建 Python 环境...
-  %PY% -m venv .venv
-  if errorlevel 1 goto fail
-  ".venv\Scripts\python.exe" -m pip install -r requirements.txt
-  if errorlevel 1 goto fail
-  echo ok> ".venv\.deps-ok"
-) else (
-  if not exist ".venv\.deps-ok" (
-    echo 正在安装依赖...
-    ".venv\Scripts\python.exe" -m pip install -r requirements.txt
-    if errorlevel 1 goto fail
-    echo ok> ".venv\.deps-ok"
-  )
-)
+"%PY%" -c "import snap7" >nul 2>nul
+if errorlevel 1 goto install
+"%PY%" -c "import websockets" >nul 2>nul
+if errorlevel 1 goto install
+goto run
 
-".venv\Scripts\python.exe" run_twin.py
+:install
+echo Installing dependencies (snap7, websockets)...
+"%PY%" -m pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host mirrors.aliyun.com
 if errorlevel 1 (
-  echo.
-  echo 启动失败，请查看上面的错误信息。
+  echo [ERROR] Failed to install dependencies.
   pause
+  exit /b 1
 )
-exit /b 0
 
-:fail
+:run
+echo Starting Digital Twin server and opening browser...
+"%PY%" run_twin.py
 echo.
-echo 环境创建或依赖安装失败。请检查网络和 Python 安装。
+echo ==============================================
+echo   TIA Web Twin stopped.
+echo ==============================================
 pause
-exit /b 1
+exit /b 0

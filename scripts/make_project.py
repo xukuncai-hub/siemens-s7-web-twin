@@ -20,7 +20,14 @@ TEMPLATE = SKILL / "assets" / "template"
 RUNTIME = SKILL / "assets" / "runtime" / "tia-twin-client.js"
 THREE_DEMO = SKILL / "assets" / "three-demo"
 SCRIPTS = ["tia_gateway.py", "validate_manifest.py", "generate_scl.py", "run_twin.py", "requirements.txt"]
-LAUNCHERS = ["start_twin.sh", "start_twin.bat"]
+LAUNCHERS = [
+    "start_twin.sh",
+    "start_twin.bat",
+    "start.bat",
+    "start_silent.bat",
+    "stop.bat",
+    "make_shortcut.bat",
+]
 PACKAGING = ["desktop_app.py", "tia_twin.spec", "build_exe.bat"]
 TEMPLATE_FILES = ["index.html", "styles.css", "app.js", "twin.manifest.json", "gateway.config.json"]
 
@@ -55,6 +62,8 @@ def main() -> int:
     out.mkdir(parents=True, exist_ok=True)
     if args.scene == "3d":
         shutil.copy2(THREE_DEMO / "index.html", out / "index.html")
+        shutil.copy2(THREE_DEMO / "styles.css", out / "styles.css")
+        shutil.copy2(THREE_DEMO / "app.js", out / "app.js")
         shutil.copytree(THREE_DEMO / "vendor", out / "vendor", dirs_exist_ok=True)
         shutil.copy2(TEMPLATE / "twin.manifest.json", out / "twin.manifest.json")
         shutil.copy2(TEMPLATE / "gateway.config.json", out / "gateway.config.json")

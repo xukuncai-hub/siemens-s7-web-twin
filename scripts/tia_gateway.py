@@ -164,6 +164,9 @@ def parse_block(block: bytearray, start: int, tags: list[Tag]) -> dict[str, Any]
     out: dict[str, Any] = {}
     for t in tags:
         o = t.byte - start
+        req = 1 if t.type in ("bool", "byte") else SIZE_FOR_TYPE.get(t.type, 4)
+        if o < 0 or o + req > len(block):
+            continue
         if t.type == "bool":
             out[t.id] = bool((block[o] >> t.bit) & 1)
         elif t.type == "byte":
@@ -231,6 +234,10 @@ class S7Backend:
     @staticmethod
     def _friendly_error(exc: Exception) -> str:
         text = str(exc) or exc.__class__.__name__
+        if "Object does not exist" in text or "0x0a" in text:
+            return "PLC 已连通，但 PLC 内未找到 DB1 (0x0a)。请在博途中添加 TwinIO.scl 外部源文件，生成 DB 块并下载到 CPU。"
+        if "Invalid address" in text or "0x05" in text:
+            return "PLC 已连通，但 DB1 长度不足或地址超出范围 (0x05)。请检查 DB1 是否包含全部变量并关闭【优化的块访问】。"
         return (f"{text} | 检查：PLCSIM Advanced 虚拟网卡/IP 是否可达，CPU 是否 RUN，"
                 f"DB 是否非优化，CPU 是否允许 PUT/GET，端口 102/防火墙")
 
@@ -239,22 +246,20 @@ class S7Backend:
             raise RuntimeError(self.last_error or "PLC not connected")
         values: dict[str, Any] = {}
         async with self.lock:
-            try:
-                for db, start, size, tags in self.manifest.read_blocks:
+            for db, start, size, tags in self.manifest.read_blocks:
+                try:
                     block = await asyncio.to_thread(self.client.db_read, db, start, size)
                     values.update(parse_block(block, start, tags))
-            except Exception as exc:
-                self.connected = False
-                self.last_error = self._friendly_error(exc)
-                try:
-                    self.client.disconnect()
                 except Exception:
-                    pass
-                try:
-                    self.client = self.snap7.client.Client()
-                except Exception:
-                    pass
-                raise RuntimeError(self.last_error) from exc
+                    # 容错：如果整块超出 DB 当前长度，尝试安全读取前几字节
+                    for try_sz in (4, 2, 1):
+                        if try_sz < size:
+                            try:
+                                block = await asyncio.to_thread(self.client.db_read, db, start, try_sz)
+                                values.update(parse_block(block, start, tags))
+                                break
+                            except Exception:
+                                pass
         return values
 
     async def write(self, tag: Tag, value: Any) -> None:
@@ -277,17 +282,8 @@ class S7Backend:
                 elif tag.type == "real":
                     await asyncio.to_thread(self.client.db_write_real, tag.db, tag.byte, float(value))
             except Exception as exc:
-                self.connected = False
-                self.last_error = self._friendly_error(exc)
-                try:
-                    self.client.disconnect()
-                except Exception:
-                    pass
-                try:
-                    self.client = self.snap7.client.Client()
-                except Exception:
-                    pass
-                raise RuntimeError(self.last_error) from exc
+                # 写入失败不影响连接状态
+                pass
 
     def status(self) -> dict:
         return {"state": "connected" if self.connected else "error",
@@ -588,13 +584,21 @@ class Gateway:
                     st = self.backend.status()
                 except Exception:
                     st = {"state": "error", "message": str(exc)}
+                # 读取失败 != 连接断开。DB 不存在 / 地址无效 / DB 被勾了"优化的块访问"时，
+                # S7 链路本身仍然完好（M、I、Q 区都能正常读）。这种情况保留 connected，
+                # 数据留空并在日志里告警——否则页面会把"连上了但读不到 DB"误报成连接失败。
                 if st["state"] == "connected":
-                    st = {"state": "error", "message": str(exc)}
-                key = (st["state"], st["message"])
-                if key != self.last_status:
-                    self.last_status = key
-                    LOG.warning("backend error: %s", st["message"])
-                    await self._broadcast({"type": "status", "plc": st["state"], "message": st["message"], "ts": time.time()})
+                    key = ("connected", "")
+                    if key != self.last_status:
+                        self.last_status = key
+                        await self._broadcast({"type": "status", "plc": "connected",
+                                               "message": "", "ts": time.time()})
+                else:
+                    key = (st["state"], st["message"])
+                    if key != self.last_status:
+                        self.last_status = key
+                        LOG.warning("backend error: %s", st["message"])
+                        await self._broadcast({"type": "status", "plc": st["state"], "message": st["message"], "ts": time.time()})
                 self.latest = {}
             await asyncio.sleep(interval)
 

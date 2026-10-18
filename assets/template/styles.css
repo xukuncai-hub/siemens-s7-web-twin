@@ -135,7 +135,28 @@ h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: .4px; }
 .advanced .field-row { margin-top: 4px; }
 .hint { margin: 9px 0 0; color: var(--faint); font-size: 10px; line-height: 1.5; }
 .hint.ok { color: var(--green); }
+.hint.warn { color: var(--amber); }
 .hint.error { color: var(--red); }
+.tag-val { font-family: var(--mono); font-size: 11px; color: var(--cyan); padding: 2px 7px; border-radius: 3px; background: rgba(61,214,245,.08); border: 1px solid rgba(61,214,245,.15); }
+.tag-val.bool-true { color: var(--green); background: rgba(84,230,161,.12); border-color: rgba(84,230,161,.25); }
+.tag-val.bool-false { color: var(--dim); background: rgba(126,151,170,.08); border-color: rgba(126,151,170,.15); }
+.tag-val.none { color: var(--faint); background: transparent; border-color: transparent; }
+.tag-group-title {
+  padding: 6px 9px 4px; font-size: 10px; font-weight: 600; color: var(--cyan);
+  background: rgba(61, 214, 245, 0.08); border-bottom: 1px solid var(--line);
+  display: flex; justify-content: space-between; align-items: center; letter-spacing: .5px;
+}
+.tag-group-title.out {
+  color: var(--soft); background: rgba(180, 200, 214, 0.06); margin-top: 4px;
+}
+.btn-micro {
+  appearance: none; border: 1px solid rgba(61, 214, 245, 0.35); background: rgba(61, 214, 245, 0.12);
+  color: var(--cyan); border-radius: 3px; padding: 2px 6px; font-size: 9px; font-family: var(--mono);
+  cursor: pointer; transition: all .15s; margin-left: 6px;
+}
+.btn-micro:hover { background: var(--cyan); color: #06121b; }
+.tag-badge { font-size: 8px; font-family: var(--mono); color: var(--dim); padding: 1px 4px; border-radius: 2px; background: rgba(255,255,255,0.05); }
+
 .footer {
   display: flex; justify-content: space-between; gap: 14px; padding-top: 10px; border-top: 1px solid var(--line);
   color: var(--faint); font-family: var(--mono); font-size: 8px; letter-spacing: .8px;

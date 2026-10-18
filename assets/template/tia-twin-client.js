@@ -78,6 +78,12 @@
 
     _applyValues(values, source) {
       if (!values) return;
+      if (source === 'snapshot') {
+        this.values = Object.assign({}, values);
+        this._emit('values', { values: this.values, changed: this.values, source });
+        Object.keys(this.values).forEach((tag) => this._emit('tag:' + tag, this.values[tag]));
+        return;
+      }
       const changed = {};
       let any = false;
       Object.keys(values).forEach((k) => {
@@ -85,7 +91,7 @@
         changed[k] = values[k];
         this.values[k] = values[k];
       });
-      if (any || source === 'snapshot') {
+      if (any) {
         this._emit('values', { values: this.values, changed, source });
         Object.keys(changed).forEach((tag) => this._emit('tag:' + tag, changed[tag]));
       }
@@ -96,8 +102,10 @@
       if (this._mockUnsub) { try { this._mockUnsub(); } catch (e) {} this._mockUnsub = null; }
       this.mock = mock || null;
       this._mockMode = !!mock;
+      this.values = {};
       if (!mock) {
         this._setStatus('idle');
+        this._emit('values', { values: {}, changed: {}, source: 'reset' });
         return;
       }
       this._closed = false;

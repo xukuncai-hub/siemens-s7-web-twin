@@ -104,11 +104,22 @@ def main() -> int:
         print("  停止 : Ctrl+C", flush=True)
         print("", flush=True)
         if not args.no_browser:
-            threading.Timer(0.4, lambda: webbrowser.open(page)).start()
+            def _open_browser():
+                try:
+                    if sys.platform == "win32":
+                        subprocess.Popen(f'start "" "{page}"', shell=True)
+                    else:
+                        webbrowser.open(page)
+                except Exception:
+                    try:
+                        webbrowser.open(page)
+                    except Exception:
+                        pass
+            threading.Timer(0.4, _open_browser).start()
         while True:
             if proc is not None and proc.poll() is not None:
                 print(f"网关已退出（code {proc.returncode}）。")
-                break
+                return 1
             time.sleep(0.5)
     except KeyboardInterrupt:
         print("\n正在停止…", flush=True)

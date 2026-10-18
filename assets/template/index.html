@@ -47,12 +47,21 @@
 
       <aside class="sidebar">
         <section class="panel">
-          <div class="panel-head"><h2>操作台</h2><span id="opState" class="mono">OFFLINE</span></div>
+          <div class="panel-head"><h2>操作台 (现场输入 ➔ PLC)</h2><span id="opState" class="mono">OFFLINE</span></div>
           <div class="control-grid">
             <button class="btn primary" data-cmd="cmd.start">启动</button>
             <button class="btn" data-cmd="cmd.stop">停止</button>
             <button class="btn" data-cmd="cmd.reset">复位</button>
             <button class="btn danger" data-cmd="cmd.estop">急停</button>
+          </div>
+          <div style="margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--line);">
+            <div style="font-size: 10px; color: var(--soft); margin-bottom: 6px; display: flex; justify-content: space-between;">
+              <span>现场传感器模拟 (外部 ➔ PLC)</span>
+              <span id="pe1StateLabel" class="mono" style="color: var(--dim);">PE1: 0</span>
+            </div>
+            <button id="btnTriggerPe1" class="btn wide" style="margin-top: 0; background: rgba(61,214,245,0.08); border-color: rgba(61,214,245,0.3); color: var(--cyan);" data-cmd="sensor.pe1" title="模拟现场工件遮挡光电开关，向 PLC 发送 DB1.DBX0.6 脉冲信号">
+              📡 触发 PE1 感应脉冲 (发给 PLC)
+            </button>
           </div>
         </section>
 
@@ -85,6 +94,14 @@
             </details>
             <button id="btnPlcConnect" class="btn primary wide">连接 PLCSIM Advanced</button>
             <p id="onlineMsg" class="hint">输入 PLCSIM Advanced 虚拟 PLC 的 IP 地址。网关由启动器在后台运行。</p>
+            <label class="auto-row" style="margin-top: 10px; margin-bottom: 4px;">
+              <input id="autoSensorOnline" type="checkbox" checked>
+              <span>物料路过 PE1 时自动发信号给 PLC</span>
+            </label>
+            <div class="online-monitor" style="margin-top: 10px;">
+              <div class="panel-head"><h2>信号监控与映射</h2><span id="onlineMonitorBadge" class="mono">PLC DATA</span></div>
+              <div id="onlineTagRows" class="sim-rows" style="max-height: 340px;"></div>
+            </div>
           </div>
         </section>
       </aside>

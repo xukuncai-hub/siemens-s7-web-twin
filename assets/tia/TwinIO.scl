@@ -10,21 +10,15 @@ DATA_BLOCK "TwinIO"
 VERSION : 0.1
 NON_RETAIN
    STRUCT
-      cmd_start : Bool; // DB1.DBX0.0: 启动按钮（脉冲）
-      cmd_stop : Bool; // DB1.DBX0.1: 停止按钮（脉冲）
-      cmd_reset : Bool; // DB1.DBX0.2: 复位按钮（脉冲）
-      cmd_estop : Bool; // DB1.DBX0.3: 急停按钮（脉冲，教学用）
-      _pad_b0_bits : ARRAY[0..3] OF Bool; // 填充位
-      _pad_b1 : Byte; // 字节对齐填充
-      box_count : Int; // DB1.DBW2: 分拣计数
-      line_speed : Real; // DB1.DBD4: 输送带线速度
-      line_running : Bool; // DB1.DBX8.0: 产线运行中
-      line_fault : Bool; // DB1.DBX8.1: 故障 / 急停已触发
-      sensor_pe1 : Bool; // DB1.DBX8.2: 光电传感器 PE1（孪生写入 PLC）
-      cyl_extended : Bool; // DB1.DBX8.3: 气缸伸出到位（孪生写入 PLC）
-      out_cyl : Bool; // DB1.DBX8.4: PLC 输出：气缸电磁阀
-      stack_green : Bool; // DB1.DBX8.5: 绿色指示灯
-      stack_red : Bool; // DB1.DBX8.6: 红色指示灯
+      cmd_start : Bool; // DB1.DBX0.0: 启动按钮（现场输入 -> PLC）
+      cmd_stop : Bool; // DB1.DBX0.1: 停止按钮（现场输入 -> PLC）
+      cmd_reset : Bool; // DB1.DBX0.2: 复位按钮（现场输入 -> PLC）
+      cmd_estop : Bool; // DB1.DBX0.3: 急停按钮（现场输入 -> PLC）
+      line_running : Bool; // DB1.DBX0.4: 输送带运转（PLC 输出：1=转 0=停）
+      out_cyl : Bool; // DB1.DBX0.5: 推料气缸电磁阀（PLC 输出：1=伸出 0=缩回）
+      sensor_pe1 : Bool; // DB1.DBX0.6: 光电检测 PE1（现场输入 -> PLC）
+      stack_green : Bool; // DB1.DBX0.7: 运行指示灯（PLC 输出：1=亮 0=灭）
+      box_count : Byte; // DB1.DBB1: 分拣计数（PLC 内部数据/输出）
    END_STRUCT;
 
 BEGIN
@@ -32,13 +26,9 @@ BEGIN
    cmd_stop := FALSE;
    cmd_reset := FALSE;
    cmd_estop := FALSE;
-   box_count := 0;
-   line_speed := 0.00;
    line_running := FALSE;
-   line_fault := FALSE;
-   sensor_pe1 := FALSE;
-   cyl_extended := FALSE;
    out_cyl := FALSE;
+   sensor_pe1 := FALSE;
    stack_green := FALSE;
-   stack_red := FALSE;
+   box_count := 0;
 END_DATA_BLOCK

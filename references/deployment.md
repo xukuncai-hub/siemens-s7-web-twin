@@ -1,52 +1,42 @@
 # 部署与“无终端”选项
 
-普通浏览器页面不能安装/启动本地程序，也不能直接打开 S7comm 的 TCP 102。因此网页始终需要一个本地或远端的 WebSocket 网关。下面按用户操作复杂度排列。
+普通浏览器页面不能直接打开 S7comm 的 TCP 102。因此网页始终需要一个本地或远端的 WebSocket 网关。下面按用户操作复杂度排列。
 
-## A. 双击启动器（默认，需要 Python）
+## A. 双击启动器（默认零命令 · 最推荐）
 
-项目根目录：
+项目根目录已预置全套免命令行启动器（纯 7-bit ASCII，100% 兼容 Windows 11 24H2）：
 
-- Windows：双击 `start_twin.bat`
-- Linux：双击 `start_twin.desktop`
+- **Windows 用户**：
+  - **`start.bat`**：双击即可启动。自动智能寻找真实 Python（避开 WindowsApps 劫持）、启动静态服务与网关，并自动唤起默认浏览器。关闭黑窗口即退出。
+  - **`make_shortcut.bat`**：双击一次，使用原生 PowerShell 在 Windows 桌面上创建【TIA Web 3D Twin】桌面快捷方式，后续在桌面双击即可使用。
+  - **`start_silent.bat`**：后台静默启动。完全不弹出黑色 cmd 命令行窗口，3 秒后黑窗口自动消失，服务在后台常驻运行，浏览器可直接存为书签访问。
+  - **`stop.bat`**：一键干净终止所有后台常驻服务进程。
+- **Linux 用户**：双击 `start_twin.desktop`（首次可能需在文件管理器里允许执行）或执行 `./start_twin.sh`。
 
-首次会创建 `.venv`、安装 `requirements.txt`，然后启动页面 + 网关并打开浏览器。用户不需要输入命令，但机器上必须有 Python 3.10+，且会有一个终端/控制台窗口（关闭它即停止服务）。
+## B. 关于 Windows 单文件 exe 的安全限制说明
 
-## B. Windows 单文件 exe（最终用户无需 Python / 终端）
+> [!WARNING]
+> **Windows 11 24H2 安全机制限制（Smart App Control / Temp 目录拦截）**：
+> PyInstaller 默认的单文件模式（`--onefile`）在运行时必须向系统 `%TEMP%` 临时目录动态解压二进制文件。在 Windows 11 24H2 下会触发 `Could not create temporary directory!` 的安全拦截。
+> 因此：
+> 1. **严禁在 Windows 11 上向用户分发 `--onefile` 单文件 exe！**
+> 2. 交付首选 **`start.bat`** 或 **`make_shortcut.bat` 桌面图标**（启动速度最快、0 权限问题、无 DLL 解压开销）。
+> 3. 若必须打包成可执行文件分发给无 Python 的电脑，在 `tia_twin.spec` 中必须使用 `--onedir`（便携文件夹免解压模式），打包出整个目录分发，不得依赖单文件 Temp 释放。
 
-构建（开发者在一台 Windows 构建机做一次）：
+## C. Windows 服务 / 远端网页（浏览器在另一台机器 / 车间平板）
 
-1. 确认构建机有 Python 3.10+。
-2. 在项目根目录双击 `build_exe.bat`。
-3. 产物：`dist\TIAWebTwin.exe`。
-4. 把 exe 发给最终用户；双击即可，exe 内已带 Python、依赖、网关、网页与 manifest。
+适用于“网页在另一台电脑，网关常驻 PLC 所在工控机”：
 
-运行时：
-
-- 打开一个小的 Tk 控制窗口（可“打开页面/退出”），不需要控制台。
-- 页面与网关在同一个进程内；页面默认离线，点“连接 PLC”输入 PLCSIM Advanced 地址。
-- 关闭控制窗口即停止，端口自动释放。
-
-注意：
-
-- exe 打包的是构建时的 manifest 和页面；改了 tag/地址后需要重新构建。
-- 构建文件见 `desktop_app.py`、`tia_twin.spec`；PyInstaller 的 snap7 二进制由 spec 的 `collect_all('snap7')` 收集。
-- 未签名的 exe 可能触发 Windows SmartScreen；正式分发请做代码签名。
-- 2D/3D 项目都能打包；spec 会自动收集存在的 `vendor/`。
-
-## C. Windows 服务 / 远端网页（浏览器在另一台机器）
-
-适用于“网页在另一台电脑，网关常驻 PLCSIM 所在 Windows”：
-
-1. 在 PLCSIM 所在机器把 `tia_gateway.py --wait-plc` 安装成 Windows 服务（例如 NSSM），开机自启。
-2. 页面静态托管在任意 HTTP 服务上；页面在线模式填写 PLC 地址，网关地址由页面/启动参数提供。
-3. 网关必须设置 Token，限制防火墙来源；不要暴露到公网。
-
-这个模式需要管理员安装一次服务，但之后浏览器端不需要任何本地程序。
+1. 在工控机双击 `start_silent.bat`，或把 `run_twin.py --no-browser` 注册为 Windows 服务开机自启。
+2. 局域网内的任何电脑或车间平板，直接在浏览器输入：
+   `http://[工控机局域网IP]:8000/?ws=ws%3A%2F%2F[工控机局域网IP]%3A8765%2Fws`
+3. 页面在线模式选择目标 PLC 即可实时监视。
+4. 网关必须设置 Token，限制防火墙来源；不要暴露到公网。
 
 ## 不能做的事
 
 - 不能靠网页静默安装/启动 Python 网关；
 - 不能从浏览器直连 TCP 102/S7comm；
-- 不要把 8765 无 Token 暴露到公网。
-
-这是仿真/教学工具，不替代安全回路。
+- 不要把 8765 无 Token 暴露到公网；
+- 严禁在非系统盘创建跨盘符 `.venv`（会导致 `_ctypes.pyd` DLL 初始化失败）；
+- 严禁使用 `.vbs` 脚本（Win11 24H2 已彻底废除 VBScript 引擎）。

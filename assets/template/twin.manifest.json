@@ -16,127 +16,90 @@
       "id": "cmd.start",
       "address": "DB1.DBX0.0",
       "type": "bool",
-      "access": "w",
+      "access": "rw",
       "writeMode": "pulse",
-      "pulseMs": 150,
-      "desc": "启动按钮（脉冲）",
+      "pulseMs": 200,
+      "desc": "启动按钮（现场输入 -> PLC）",
       "mockInit": false
     },
     {
       "id": "cmd.stop",
       "address": "DB1.DBX0.1",
       "type": "bool",
-      "access": "w",
+      "access": "rw",
       "writeMode": "pulse",
-      "pulseMs": 150,
-      "desc": "停止按钮（脉冲）",
+      "pulseMs": 200,
+      "desc": "停止按钮（现场输入 -> PLC）",
       "mockInit": false
     },
     {
       "id": "cmd.reset",
       "address": "DB1.DBX0.2",
       "type": "bool",
-      "access": "w",
+      "access": "rw",
       "writeMode": "pulse",
-      "pulseMs": 150,
-      "desc": "复位按钮（脉冲）",
+      "pulseMs": 200,
+      "desc": "复位按钮（现场输入 -> PLC）",
       "mockInit": false
     },
     {
       "id": "cmd.estop",
       "address": "DB1.DBX0.3",
       "type": "bool",
-      "access": "w",
+      "access": "rw",
       "writeMode": "pulse",
-      "pulseMs": 150,
-      "desc": "急停按钮（脉冲，教学用）",
+      "pulseMs": 200,
+      "desc": "急停按钮（现场输入 -> PLC）",
       "mockInit": false
-    },
-    {
-      "id": "box.count",
-      "address": "DB1.DBW2",
-      "type": "int16",
-      "access": "r",
-      "desc": "分拣计数",
-      "unit": "pcs",
-      "mockInit": 0
-    },
-    {
-      "id": "line.speed",
-      "address": "DB1.DBD4",
-      "type": "real",
-      "access": "r",
-      "desc": "输送带线速度",
-      "unit": "m/s",
-      "mockInit": 0.0
     },
     {
       "id": "line.running",
-      "address": "DB1.DBX8.0",
-      "type": "bool",
-      "access": "r",
-      "desc": "产线运行中",
-      "mockInit": false
-    },
-    {
-      "id": "line.fault",
-      "address": "DB1.DBX8.1",
-      "type": "bool",
-      "access": "r",
-      "desc": "故障 / 急停已触发",
-      "mockInit": false
-    },
-    {
-      "id": "sensor.pe1",
-      "address": "DB1.DBX8.2",
+      "address": "DB1.DBX0.4",
       "type": "bool",
       "access": "rw",
-      "writeMode": "level",
-      "desc": "光电传感器 PE1（孪生写入 PLC）",
-      "mockInit": false
-    },
-    {
-      "id": "cyl.extended",
-      "address": "DB1.DBX8.3",
-      "type": "bool",
-      "access": "rw",
-      "writeMode": "level",
-      "desc": "气缸伸出到位（孪生写入 PLC）",
+      "desc": "输送带运转（PLC 输出：1=转 0=停）",
       "mockInit": false
     },
     {
       "id": "out.cyl",
-      "address": "DB1.DBX8.4",
+      "address": "DB1.DBX0.5",
       "type": "bool",
-      "access": "r",
-      "desc": "PLC 输出：气缸电磁阀",
+      "access": "rw",
+      "desc": "推料气缸电磁阀（PLC 输出：1=伸出 0=缩回）",
+      "mockInit": false
+    },
+    {
+      "id": "sensor.pe1",
+      "address": "DB1.DBX0.6",
+      "type": "bool",
+      "access": "rw",
+      "writeMode": "pulse",
+      "pulseMs": 300,
+      "desc": "光电检测 PE1（现场输入 -> PLC）",
       "mockInit": false
     },
     {
       "id": "stack.green",
-      "address": "DB1.DBX8.5",
+      "address": "DB1.DBX0.7",
       "type": "bool",
-      "access": "r",
-      "desc": "绿色指示灯",
+      "access": "rw",
+      "desc": "运行指示灯（PLC 输出：1=亮 0=灭）",
       "mockInit": false
     },
     {
-      "id": "stack.red",
-      "address": "DB1.DBX8.6",
-      "type": "bool",
-      "access": "r",
-      "desc": "红色指示灯",
-      "mockInit": false
+      "id": "box.count",
+      "address": "DB1.DBB1",
+      "type": "byte",
+      "access": "rw",
+      "desc": "分拣计数（PLC 内部数据/输出）",
+      "mockInit": 0
     }
   ],
   "bindings": [
     { "object": "conveyor", "property": "running", "tag": "line.running" },
-    { "object": "conveyor", "property": "speed", "tag": "line.speed" },
     { "object": "pe1", "property": "blocked", "tag": "sensor.pe1" },
     { "object": "pusher", "property": "command", "tag": "out.cyl" },
-    { "object": "pusher", "property": "extended", "tag": "cyl.extended" },
     { "object": "counter", "property": "value", "tag": "box.count" },
-    { "object": "stack", "property": "green", "tag": "stack.green" },
-    { "object": "stack", "property": "red", "tag": "line.fault" }
+    { "object": "stack", "property": "green", "tag": "stack.green" }
   ]
 }

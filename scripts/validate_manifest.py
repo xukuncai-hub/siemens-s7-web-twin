@@ -97,8 +97,8 @@ def validate(path: Path):
     if not isinstance(slot, int) or not 0 <= slot <= 31:
         errors.append("plc.slot 必须是 0..31 的整数")
     dbno = plc.get("db")
-    if not isinstance(dbno, int) or dbno <= 0:
-        errors.append("plc.db 必须是大于 0 的整数")
+    if dbno is not None and (not isinstance(dbno, int) or dbno <= 0):
+        errors.append("plc.db 若指定必须是大于 0 的整数")
     poll = plc.get("defaultPollHz", 10)
     if not isinstance(poll, int) or not 1 <= poll <= 30:
         errors.append("plc.defaultPollHz 必须在 1..30")
@@ -106,7 +106,7 @@ def validate(path: Path):
     if not isinstance(tags, list) or not tags:
         return errors + ["tags 必须是非空数组"], warnings
     ids, addrs = set(), set()
-    intervals, bool_bytes = [], []
+    intervals_by_db, bool_bytes_by_db = {}, {}
     writable = readable = 0
     parsed = []
     for i, tag in enumerate(tags):
@@ -153,8 +153,8 @@ def validate(path: Path):
         except ValueError as exc:
             errors.append(f"{label}: {exc}")
             continue
-        if tdb != dbno:
-            errors.append(f"{label}: 本 skill 的 v1 契约只允许使用 plc.db={dbno}，发现 DB{tdb}")
+        if not (1 <= tdb <= 65535):
+            errors.append(f"{label}: DB 号必须在 1..65535 之间，发现 DB{tdb}")
         if kind != KIND_FOR_TYPE[typ]:
             errors.append(f"{label}: {typ} 应使用 {KIND_FOR_TYPE[typ]}，地址是 {kind}")
         if kind in ("DBW", "DBD") and byte % 2:
@@ -163,26 +163,27 @@ def validate(path: Path):
             errors.append(f"{label}: DBD 偏移 {byte} 不是 4 字节对齐")
         size = SIZE_FOR_TYPE[typ]
         if kind == "DBX":
-            bool_bytes.append(byte)
+            bool_bytes_by_db.setdefault(tdb, []).append(byte)
         else:
-            intervals.append((byte, byte + size, label))
+            intervals_by_db.setdefault(tdb, []).append((byte, byte + size, label))
         check_mock_init(tag, errors)
         parsed.append((tid or label, addr, typ, access, mode, tag.get("desc", "")))
     if readable == 0:
         errors.append("至少需要一个可读 tag (access=r/rw)")
     if writable == 0:
         warnings.append("没有可写 tag，网页只能看不能操作")
-    # 粗粒度重叠检查：标量区间不能互相重叠，也不能与布尔位所在字节重叠
-    occupied = {}
-    for start, end, label in intervals:
-        for b in range(start, end):
+    # 粗粒度重叠检查：按 DB 分组检查标量区间不能互相重叠，也不能与布尔位所在字节重叠
+    for d, ivs in intervals_by_db.items():
+        occupied = {}
+        for start, end, label in ivs:
+            for b in range(start, end):
+                if b in occupied:
+                    errors.append(f"DB{d} {label}: 字节 {b} 与 {occupied[b]} 重叠")
+                else:
+                    occupied[b] = label
+        for b in sorted(set(bool_bytes_by_db.get(d, []))):
             if b in occupied:
-                errors.append(f"{label}: 字节 {b} 与 {occupied[b]} 重叠")
-            else:
-                occupied[b] = label
-    for b in sorted(set(bool_bytes)):
-        if b in occupied:
-            errors.append(f"布尔位所在字节 {b} 与标量 {occupied[b]} 重叠")
+                errors.append(f"DB{d} 布尔位所在字节 {b} 与标量 {occupied[b]} 重叠")
     bindings = data.get("bindings")
     if not isinstance(bindings, list) or not bindings:
         errors.append("bindings 必须是非空数组")
@@ -204,7 +205,9 @@ def validate(path: Path):
                 errors.append(f"binding {obj}.{prop} 引用了不存在的 tag {tid}")
     if parsed:
         print(f"manifest: {data.get('project')}  ({path})")
-        print(f"PLC: {ip}  rack={rack} slot={slot}  DB{dbno}  poll={poll} Hz")
+        dbs_found = sorted(set(int(r[1].split('.')[0].replace('DB', '')) for r in parsed))
+        dbs_str = ", ".join(f"DB{d}" for d in dbs_found)
+        print(f"PLC: {ip}  rack={rack} slot={slot}  {dbs_str}  poll={poll} Hz")
         print(f"{'ID':<18} {'ADDRESS':<16} {'TYPE':<8} {'ACCESS':<7} {'MODE':<6} DESC")
         for row in parsed:
             print(f"{row[0]:<18} {row[1]:<16} {row[2]:<8} {row[3]:<7} {row[4]:<6} {row[5]}")

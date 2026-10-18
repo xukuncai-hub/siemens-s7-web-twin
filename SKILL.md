@@ -1,44 +1,64 @@
 ---
 name: plcsim-web-twin
-description: 生成可直接连接西门子博途 PLCSIM Advanced 的网页产线数字孪生。用于制作 2D/3D 产线仿真、教学 HMI、虚拟调试页面，通过固定 twin.manifest.json 契约、浏览器 WebSocket SDK 和 Python snap7 网关，把网页传感器回写给 S7-1500 仿真 PLC。触发词：数字孪生、产线仿真、PLCSIM Advanced、博途仿真、S7comm、虚拟调试、Three.js/Canvas 连 PLC。
+description: 生成可直接连接西门子真实实体 S7 PLC (S7-1200 / S7-1500 / S7-300) 以及博途 PLCSIM Advanced 的网页产线数字孪生。用于制作 2D/3D 产线仿真、教学 HMI、虚拟调试页面，通过固定 twin.manifest.json 契约、浏览器 WebSocket SDK 和 Python snap7 网关，把网页传感器回写给实体 PLC / 仿真 PLC。触发词：数字孪生、产线仿真、真实PLC、实体PLC、S7-1200、S7-1500、PLCSIM Advanced、博途仿真、S7comm、虚拟调试、Three.js/Canvas 连 PLC。
 ---
 
-# PLCSIM Web Twin (S7comm)
+# Siemens S7 Web Twin (S7comm: 实体 PLC + PLCSIM)
 
 ## 1. 这个 skill 解决什么
 
 让 AI 生成的网页不是“孤立的动画”，而是一个**遵循固定 I/O 契约的被控对象模型**：
 
 ```text
-浏览器数字孪生  ⇄  WebSocket JSON  ⇄  tia_gateway.py (snap7/S7comm)  ⇄  PLCSIM Advanced (虚拟 S7-1500)
+浏览器数字孪生  ⇄  WebSocket JSON  ⇄  tia_gateway.py (snap7/S7comm)  ⇄  真实 S7 PLC (S7-1200/1500/300) / PLCSIM Advanced
 ```
 
 浏览器不直接说 S7comm；PLC 逻辑留在 PLC；网页只负责机构动画、传感器计算和操作台。默认 S7comm + snap7，不使用 OPC UA。
 
+## 核心设计哲学：为调用者（Agent 与最终工程师）着想
+
+本 Skill 为**两层调用者**提供极致流畅体验：
+1. **执行层（AI Agent）**：承担 100% 的繁琐技术劳动（分析、编写、校验、生成 SCL、创建双击脚本与快捷方式）。**严禁向用户抛出任何终端命令行！**
+2. **用户层（最终工程师 / 客户 / 产线人员）**：享受“纯图形化、零环境门槛、开箱即用”的体验。
+
+```text
+AI Agent（后台全自动执行）:
+  产线机电分析 ➔ 生成 manifest ➔ 自动校验 ➔ 自动生成 TwinIO.scl ➔ 准备中文双击脚本/单文件 exe
+                                       │
+                                       ▼ 交付给人类用户
+最终用户（零命令行使用）:
+  ① 双击启动脚本 / exe ➔ ② 博途导入 SCL 鼠标生成块 ➔ ③ 浏览器右上角输入 PLC IP 点击连接
+```
+
 ## 快速开始
 
-以下生成命令由 **AI/开发者** 执行；最终用户只双击，不敲命令。
+以下工程脚手架与 SCL 生成由 **AI Agent 在后台自动执行**；交付给用户的工程**默认即具备双击即用能力**：
 
 ```bash
+# 由 AI 在后台执行，切勿让用户在终端敲：
 python scripts/make_project.py --out ./my-line          # 2D 操作台
 python scripts/make_project.py --out ./my-line --scene 3d  # 3D 产线展示
 ```
 
-生成后把项目文件夹交给用户，**无需敲任何命令**：
+项目生成后直接交付用户，**全程无需敲任何命令**：
 
-- Windows：双击 `start_twin.bat`
-- Linux：双击 `start_twin.desktop`（首次可能需在文件管理器里允许执行）
-
-首次启动会自动创建 `.venv` 并安装依赖，随后自动打开页面。页面默认是**离线仿真**，可直接改数据；点“连接 PLC”，输入 PLCSIM Advanced 的 IP/rack/slot 即可切到实时模式。`run_twin.py` 只用于自动化或开发调试。3D 场景需要 WebGL；不支持时用默认 2D。
-
-如果要**完全无 Python、无终端**：在 Windows 构建机双击 `build_exe.bat` 生成 `dist/TIAWebTwin.exe`，把 exe 交给用户双击即可。详见 `references/deployment.md`。
+- **Windows 用户（双击即用，0 终端输入）**：
+  - 双击 `start.bat`（或运行 `make_shortcut.bat` 一键在桌面生成专属图标）。
+  - （由于 Windows 11 24H2 彻底废弃了 VBScript 引擎，系统全面采用原生 PowerShell 隐藏模式创建桌面图标，告别 `.vbs` 缺失报错）。
+- **Linux 用户**：双击 `start_twin.desktop`。
 
 ## 2. 硬性规则（不得绕过）
 
 1. **只通过网关访问 PLC**。网页里禁止出现 `snap7`、S7 socket 或 PLC 原始地址直连。
 2. **单一契约**：`twin.manifest.json` 是 tag、地址、访问方向、写模式和对象绑定的唯一定义。网页禁止硬编码 DB 地址。
-3. **PLC 边界**：所有 I/O 都通过 `TwinIO` DB 交换。网页写传感器/到位信号，读取 PLC 输出和状态；命令用 `pulse` 写。
-4. **真实模式下网页不重复实现 PLC 逻辑**。网页的物理模型只响应 PLC 输出、计算传感器并回写；梯形图/SCL 控制逻辑在 PLC 中。
+3. **PLC 边界**：所有 I/O 都通过 `TwinIO` DB 交换。命令用 `pulse` 写。
+4. **严格区分信号流向与产线机电职责（核心原则）**：
+   - **现场输入 ➔ PLC (DI / AI，外部向 PLC 发信号)**：
+     - 包括：操作按钮（`cmd.start`, `cmd.stop`）、现场光电/接近传感器（`sensor.pe1`）、气缸原位/到位磁簧反馈（`cyl.retracted`, `cyl.extended`）、安全光栅等。
+     - **严禁**将传感器设计为由 PLC 控制的输出！传感器是客观世界的状态，**必须由网页虚拟现场在工件到位时自动写入 PLC**，并在界面上提供单步人工点动测试通道。
+   - **PLC 输出 ➔ 现场执行器 (DO / AO，由 PLC 逻辑控制外部)**：
+     - 包括：输送带电机接触器（`line.running`）、推料/阻挡气缸电磁阀（`out.cyl`）、运行/报警指示灯（`stack.green`, `stack.red`）、分拣计数与状态字（`box.count`）。
+     - **网页在真实模式下严禁自行虚构控制逻辑**，网页动画（皮带转动、气缸推拉、灯亮灭）**必须且只能读取 PLC 输出状态来驱动**。PLC 输出 1 则动，输出 0 则停。
 5. **DB 必须非优化访问**，CPU 必须允许 PUT/GET；16 位量偶数字节对齐，32 位量 4 字节对齐。
 6. **页面只有两种模式**：`离线仿真`（本地 mock，可直接改数据）和 `连接 PLC`（用户只填 PLC IP/rack/slot）。默认离线；真实连接由用户点击触发。不要把网关 URL/Token、MOCK/Tag 工程面板暴露给操作者。未连接时禁用按钮并显示等待状态。
 7. **安全边界**：这是仿真/教学工具，不是安全回路。页面不得写 Q 输出区，只写 `TwinIO`；不得用于真实设备安全控制。
@@ -46,53 +66,86 @@ python scripts/make_project.py --out ./my-line --scene 3d  # 3D 产线展示
 
 ## 3. 标准交付结构
 
-生成项目时，把下列内容落到项目根目录（推荐用 `assets/template` + `scripts/make_project.py` 复制，而不是从零重写）：
+生成项目时，把下列内容落到项目根目录（推荐用 `assets/template` + `scripts/make_project.py` 自动生成，而不是从零重写）：
 
 ```text
 project/
-├── index.html
-├── tia-twin-client.js         # 固定浏览器 SDK，不要改协议
-├── twin.manifest.json         # 信号字典 + bindings
-├── TwinIO.scl                 # 由 generate_scl.py 生成
-├── gateway.config.json
-├── run_twin.py                # 自动化/开发启动（用户不直接运行）
-├── start_twin.bat             # Windows 双击启动
+├── index.html                 # 孪生主页面（2D/3D 画布 + 双模式操作台）
+├── app.js                     # 孪生场景机构动画、物理碰撞感应、状态同步
+├── styles.css                 # 2D 工业深色风格样式
+├── tia-twin-client.js         # 固定浏览器 SDK，不要改动协议
+├── twin.manifest.json         # 信号字典、多 DB 地址、bindings 契约
+├── TwinIO.scl                 # 由 AI 自动生成好的 SCL 外部源文件（含中文注释）
+├── 双击启动.bat                # Windows 中文启动器（自动解决环境、静默拉起并开网页）
+├── 启动数字孪生(无黑框).vbs    # Windows 静默启动（完全不弹黑色终端黑框）
+├── 创建桌面快捷方式.bat        # 一键在用户 Windows 桌面上创建图标
+├── build_exe.bat              # Windows 单文件 exe 打包器（生成无需 Python 的独立程序）
+├── start_twin.bat             # 标准 Windows 启动器
 ├── start_twin.sh              # Linux 启动脚本
-├── start_twin.desktop         # Linux 双击启动
-├── desktop_app.py             # 无终端 exe 的入口（开发者打包用）
-├── tia_twin.spec              # PyInstaller 配置
-├── build_exe.bat              # Windows 单文件 exe 构建
-├── tia_gateway.py
-├── validate_manifest.py
-├── generate_scl.py
-├── requirements.txt
-├── styles.css                 # 2D 模板（与 app.js 一起）
-├── app.js                     # 2D 场景/物理模型/两模式操作台
-└── vendor/                    # 3D 模板：本地 Three.js（无 CDN，与 index.html 一起）
+├── start_twin.desktop         # Linux 桌面图标双击启动
+├── desktop_app.py             # 独立桌面版 GUI 壳（配合 PyInstaller 打包）
+├── tia_twin.spec              # PyInstaller 打包配置
+├── tia_gateway.py             # 本地 S7comm / WebSocket 网关
+├── validate_manifest.py       # 契约规则自动校验器
+├── generate_scl.py            # 多 DB SCL 自动生成器
+├── requirements.txt           # Python 依赖
+├── gateway.config.json        # 网关本地端口与默认配置
+└── vendor/                    # 3D 模板本地 Three.js 依赖（无 CDN 纯离线）
 ```
 
 2D 和 3D 二选一；`--scene` 决定生成哪套。3D 需要浏览器 WebGL，2D 无此依赖。
 
 参考实现都在本 skill 的 `assets/` 与 `scripts/` 中；先复用，再改场景。
 
-## 4. 推荐工作流
+## 4. 产线分析与推荐工作流（AI 必经步骤）
 
-1. **采集对象**：列出执行器（电机、气缸、阀）、传感器（光电、限位、到位）和按钮；确认 PLC IP、rack/slot、DB 号。
-2. **写 manifest**：按 `references/contract.md` 的地址/类型规则分配 tag；语义 ID 用 `cmd.*` / `line.*` / `sensor.*` / `out.*` / `cyl.*`。没有现成 DB 时，以模板 `TwinIO` 为起点并明确说明假设。
-3. **校验 + 生成 SCL**：
-   ```bash
-   python validate_manifest.py twin.manifest.json
-   python generate_scl.py twin.manifest.json TwinIO.scl
-   ```
-4. **生成项目**：
-   ```bash
-   python scripts/make_project.py --out ./my-line [--manifest ./my-line.manifest.json] [--scene 3d]
-   ```
-   或手工复制 `assets/template` + `tia-twin-client.js` + 网关脚本。
-5. **改场景**：保留 `tia-twin-client.js`、manifest 契约、两种模式和 HUD；替换 Canvas 或 Three.js 场景与物理逻辑。离线数据面板从 manifest 生成；在线表单只收 PLC IP/rack/slot。
-6. **离线验收**：启动/停止/复位/急停、修改布尔/数值数据、自动检测开关、推料、计数、刷新页面。
-7. **在线验收**：用 `run_twin.py` 启动页面 + 网关，点“连接 PLC”输入 PLCSIM Advanced 地址；网关通过 `plc.configure` 热切换目标，不要求用户改 JSON 或重启网关。
-8. **闭环验收**：网页启动 → PLC 运行 → 光电触发（网页写 `sensor.pe1`） → PLC 输出 `out.cyl` → 推料气缸动作 → 网页写 `cyl.extended` → PLC 计数/联锁。
+任何数字孪生生成前，**AI 必须先对目标产线进行机电对象与信号拓扑分析**，不得跳过：
+
+### 步骤 1：产线机电对象与信号流向分析
+AI 在动手写代码或 manifest 前，必须在思考与回答中显式完成以下三张清单梳理：
+1. **执行机构清单（Actuators，归入 PLC 输出 ➔ 现场）**：
+   - 输送系统：主输送带电机（`line.running`）、分拣输送带、转台
+   - 气动与执行：推料气缸电磁阀（`out.cyl`）、阻挡气缸、升降气缸、真空吸盘
+   - 声光报警：三色灯（`stack.green`, `stack.yellow`, `stack.red`）、蜂鸣器
+2. **传感器与人机输入清单（Sensors & Inputs，归入 现场输入 ➔ PLC）**：
+   - 操作指令：启动（`cmd.start`）、停止（`cmd.stop`）、复位（`cmd.reset`）、急停（`cmd.estop`）
+   - 物料检测：入口检测光电（`sensor.in`）、分拣到位光电（`sensor.pe1`）、满料检测光电
+   - 机构状态反馈：气缸原位磁簧（`cyl.retracted`）、气缸伸出到位磁簧（`cyl.extended`）
+3. **闭环交互链推演（确保闭环成立）**：
+   - 例子：`网页按启动 [cmd.start]` ➔ `PLC 输出驱动输送带 [line.running=1]` ➔ `网页工件到达 PE1 自动回写 [sensor.pe1=1]` ➔ `PLC 收到后输出气缸电磁阀 [out.cyl=1]` ➔ `网页气缸伸出推料` ➔ `工件入箱/气缸到位 [cyl.extended=1]` ➔ `PLC 计数器 [box.count+1] 并收回气缸 [out.cyl=0]`。
+
+### 步骤 2：编写 manifest
+按 `references/contract.md` 的地址/类型规则分配 tag；语义 ID 用 `cmd.*` / `line.*` / `sensor.*` / `out.*` / `cyl.*`。没有现成 DB 时，以紧凑 `TwinIO` 为起点，按前述分析严格标明读写权限与说明。
+
+### 步骤 3：校验 + 生成 SCL（AI 在后台自动完成）
+
+> [!IMPORTANT]
+> **AI 职责红线**：此步骤由 AI Agent 在后台静默执行，**绝对不要**将此命令作为步骤抛给人类用户在终端敲！
+> AI 必须确保 `TwinIO.scl` 在交付给用户前已自动生成完毕，包含正确的变量名、多 DB 分区和偶数字节对齐。
+
+```bash
+# AI 后台自主执行，无需用户参与：
+python validate_manifest.py twin.manifest.json
+python generate_scl.py twin.manifest.json TwinIO.scl
+```
+
+### 步骤 4：生成项目与一键启动工具（AI 自动装配）
+
+```bash
+# AI 后台自主执行：
+python scripts/make_project.py --out ./my-line [--manifest ./my-line.manifest.json] [--scene 3d]
+```
+脚手架会自动装配好 `双击启动.bat`、`启动数字孪生(无黑框).vbs`、`创建桌面快捷方式.bat` 及打包工具。
+如用户需要免 Python 运行，AI 可继续调用 `python -m PyInstaller --noconfirm --clean tia_twin.spec` 为用户生成好 `dist/TIAWebTwin.exe`。
+
+### 步骤 5：定制场景与物理感知
+保留 `tia-twin-client.js`、manifest 契约与两种模式。
+- **物理感知**：在场景动画循环中检测工件位置，当工件遮挡传感器时，**自动调用 SDK 回写 PLC**；工件离开时写 `false`。
+- **操作面板**：将监控列表明确区分为 **【现场输入 ➔ PLC (DI)】**（提供点动发信号按钮）与 **【PLC 输出 ➔ 现场 (DO)】**（纯读取展示）。
+
+### 步骤 6：离线与在线闭环验收
+- 离线模式：启动/停止/复位/急停、修改布尔/数值数据、自动检测开关、推料、计数。
+- 在线模式：输入 PLCSIM Advanced 地址连接，验证 S7 读写完全正常、无地址越界报错、网页与 PLC 闭环顺畅。
 
 ## 5. 浏览器 SDK（固定 API）
 
@@ -209,7 +262,123 @@ python tia_gateway.py --config gateway.config.json --wait-plc
 | `cyl.extended` | DB1.DBX8.3 | 网页→PLC level | 到位 |
 | `out.cyl` | DB1.DBX8.4 | PLC→网页 | 推料输出 |
 
-## 8. 验收清单
+## 8. 实战经验总结与设计红线 (Lessons Learned & Anti-Patterns)
+
+根据多轮真实 PLC 联调反馈，AI 开发或修改数字孪生时必须坚守以下七大准则：
+
+1. **双服务协同原则（禁止单独启动静态服务）**：
+   - 数字孪生依赖「静态 Web 服务 (8000)」与「S7 WebSocket 网关 (8765)」成对协同工作。
+   - 严禁教唆用户仅使用 `python -m http.server` 启动，否则缺少 8765 网关监听，页面必定报错“连接断开/无法连接”。统一使用 `run_twin.py` 或 `start_twin.bat`。
+
+2. **传输链路层与数据块层解耦（连接只管连接，不要因 DB 读失败中断网络）**：
+   - 核心认知：即使 PLC 内部尚未建立 DB1、或 DB 块尚未下载到 CPU（报 0x05/0x0a），S7 物理连接（TCP 102 握手）依然是成功的！
+   - 严禁在网关 `read_all()` 抛出 DB 异常时执行 `self.connected = False` 强行切断连接。网关应做物理层保活（如探测 M 区），页面状态必须如实显示「PLC 已连通（绿色）」，并将具体 DB 不存在的友好提示作为字段警告展示，不能直接判定链路死亡。
+
+3. **紧凑初始契约与容错读取（严防 0x05 Invalid address 越界崩塌）**：
+   - 真实 PLC 中新建的测试 DB 往往极小（例如仅有 2 个字节）。如果上位机 manifest 规划了 8~10 字节，S7comm 读越界就会直接报 `0x05` 彻底失败。
+   - 最小闭环应当采用紧凑 2 字节布局（如 DBB0 装所有开关量，DBB1 装计数值）；网关必须包含数组切片防越界检查。
+
+4. **离线/在线数据彻底隔离（严禁残留 Mock 数据污染在线视图）**：
+   - 痛点：“这些数据我 PLC 根本没有给，哪里来的？”
+   - 必须杜绝 Mock 数据缓存残留。切到在线模式时，必须强制无条件重置 `values = {}`，未收到 PLC 真实广播前，所有数据必须显示为 `— (未提供)`。
+
+5. **纯信号驱动机制（前端严禁自行跑仿真业务逻辑）**：
+   - 痛点：“产线不需要逻辑，只是读取信号，PLC 那边发什么就动什么”。
+   - 真实模式下的数字孪生是标准的 I/O 镜像与物理受控对象。输送带滚不滚、气缸伸不伸、指示灯亮不亮，**100% 仅响应从 PLC 读回的真实输出（DO）**。PLC 给 1 动画才动，PLC 给 0 动画停止，严禁前端内置虚假定时器。
+
+6. **传感器（DI）本质与双通道触发（客观世界向 PLC 发信号，绝非 PLC 修改）**：
+   - 痛点：“光电检测 PE1 这种传感器是外面向 PLC 发信号，就应该有信号给 PLC，而不是 PLC 那边修改！”
+   - 现场传感器（光电、接近、限位）是**输入设备（DI）**，是客观物理世界向 PLC 反馈信号。
+   - 数字孪生必须提供：
+     ① **自动物理感应**：工件在输送带上移动遮挡探头时，前端自动向 PLC 写入 `sensor.pe1 = 1`；离开后自动写 `0`。
+     ② **单步测试点动通道**：操作台提供一键「触发感应脉冲 (发给 PLC)」按钮，监控面板提供每项输入的「发脉冲 ⚡」按钮，且支持鼠标直点画布上的探头。
+
+7. **强制产线机电与信号流向三清单分析**：
+   - 任何生成任务前，AI 必须先将信号严谨划分为【现场输入 ➔ PLC (DI)】与【PLC 输出 ➔ 现场 (DO)】，并推演完整闭环时序链，不得盲目生成混乱的 tag。
+
+8. **零终端交付与调用者共情原则（严禁向用户抛命令行）**：
+   - 痛点：“还要敲命令行啥的，对于其他人好麻烦！”
+   - 工控与自动化领域工程师、现场调试员或客户普遍排斥黑色命令行窗口。
+   - **AI 的职责是技术全包**：`twin.manifest.json` 编写、`validate_manifest.py` 校验、`TwinIO.scl` 生成、启动工具配置全部在后台由 AI 自主静默执行完毕，**严禁**让用户去跑这些构建命令！
+   - **交付物必须干净可靠**：工程根目录必须包含 `start.bat`（标准双击启动）、`make_shortcut.bat`（桌面图标生成）、`start_silent.bat`（后台完全静默启动）与 `stop.bat`（干净关闭服务）。
+
+9. **Windows 11 24H2 兼容性避坑红线（系统级核心经验）**：
+   - **红线 A：严禁向用户交付 PyInstaller `--onefile` 单文件 exe！**
+     - 现象：用户双击 `dist\TIAWebTwin.exe` 弹出报错 `Could not create temporary directory!`。
+     - 原理：Windows 11 24H2（启用了 Smart App Control 或组策略安全限制）严禁未签名的第三方单文件 exe 动态解压二进制到 `%TEMP%` 临时目录执行。
+     - 规则：交付首选原生批处理与桌面快捷方式。如确需打包，只能采用 `--onedir`（便携文件夹免解压模式），严禁单文件动态释放。
+   - **红线 B：严禁生成任何 `.vbs` 脚本！**
+     - 现象：双击报错 `没有文件扩展“.vbs”的脚本引擎`。
+     - 原理：微软在 Windows 11 24H2 中已彻底废弃并默认移除了 VBScript 引擎。
+     - 规则：严禁生成 `.vbs`。后台隐藏运行统一使用纯 7-bit ASCII `.bat` 内部调用 PowerShell（`-WindowStyle Hidden`）。
+   - **红线 C：所有批处理脚本必须严格保持 7-bit 纯 ASCII 编码！**
+     - 现象：`.bat` 脚本若存为 UTF-8 编码，中文 Windows `cmd.exe`（默认 CP936）在解析非英文字符时会发生字节断裂，报语法错误或路径截断。
+     - 规则：批处理中的命令与提示必须使用纯 7-bit ASCII 字符，中文信息放到 Python、HTML 或由 PowerShell 统一输出。
+   - **红线 D：批处理参数截断与逗号 `,` 陷阱！**
+     - 现象：`python -c "import snap7, websockets"` 在批处理中执行时，cmd 会把逗号解析为参数分隔符，传入 Python 变成 `import snap7 websockets` 产生 SyntaxError，导致批处理误判依赖缺失。
+     - 规则：批处理中检测依赖必须单行单模块执行，如 `python -c "import snap7"` 与 `python -c "import websockets"` 分开检测。
+   - **红线 E：WindowsApps 微软应用商店空壳别名劫持！**
+     - 现象：`where python` 找到的第一条往往是 `AppData\Local\Microsoft\WindowsApps\python.exe`，调用时会弹窗“打开应用商店”。
+     - 规则：批处理查找 Python 时，必须循环遍历 `where python` 并过滤含有 `WindowsApps` 的虚拟别名，精准锁定宿主机物理 Python 路径。
+
+10. **跨盘符虚拟环境 DLL 初始化避坑（Python 在 C 盘，项目在 D 盘）**：
+    - 现象：在非系统盘（如 D: 盘）工程目录下执行 `python -m venv .venv` 创建虚拟环境后，调用 `import snap7` 会报：
+      `ImportError: DLL load failed while importing _ctypes: 动态链接库(DLL)初始化失败`，导致网页弹出“缺少 python-snap7”。而在宿主机 C 盘全局 Python 直接运行却 100% 正常。
+    - 原理：Windows Loader 跨盘符加载 C 运行时动态库和 `libffi-8.dll` 时入口点（DllMain）返回失败。
+    - 规则：**启动器优先直接复用宿主机真实的 Python 3.10+**；若缺少依赖，则通过阿里镜像源安装至环境。切勿在非系统盘强行创建隔离 `.venv`，避免底层跨盘符 DLL 冲突。
+
+11. **双目标支持：真实西门子硬件 PLC 与 PLCSIM Advanced 仿真器并重**：
+    - **网络层等价性**：西门子实体 PLC（S7-1200 / S7-1500 / S7-300）与虚拟仿真器（PLCSIM Advanced）在网络底层都是西门子工业以太网原生协议 **S7comm（ISO-on-TCP，默认端口 102）**。网关基于 `snap7`，本就是工业级真实硬件直连库。
+    - **机型预设差异**：
+      - 西门子 S7-1200 / S7-1500 实体 PLC：Rack = 0, Slot = 1
+      - 西门子 S7-300 / ET200 实体 PLC：Rack = 0, Slot = 2
+      - PLCSIM Advanced 虚拟 PLC：Rack = 0, Slot = 1
+    - **真实硬件直连四大必查清单（AI 必须在界面或交付指引中给出）**：
+      1. **物理网络互通**：电脑网卡与 PLC IP 处于同一局域网网段，终端可互相 ping 通；
+      2. **PUT/GET 权限放行**：博途 CPU 属性【保护与安全】➔【连接机制】勾选 **“允许来自远程对象的 PUT/GET 通信访问”**；
+      3. **非优化 DB 访问**：将生成的 `TwinIO.scl` 导入博途生成 DB1，右键属性确认未勾选【优化的块访问】（SCL 默认 `{ S7_Optimized_Access := 'FALSE' }`）；
+      4. **程序下载运行**：将包含 DB1 的项目完整编译并下载到真实 PLC，且 CPU 处于 **RUN** 绿灯状态。
+    - **界面交互规范**：系统标题与连接弹窗**严禁局限于“PLCSIM”**，必须展示为“西门子 S7 真实 PLC / PLCSIM 3D 数字孪生”，提供机型预设下拉框（自动填写对应 Rack/Slot）以及硬件检查提示。
+
+12. **3D 工业真实产线建模与动静分离规范**：
+    - **零外部 CDN 依赖**：本地提供 Three.js（`vendor/three.module.min.js` 与 `OrbitControls.js`），保证无网环境下也能 100% 渲染。
+    - **机械与传感器三要素**：分段动力皮带、气动推杆/阻挡气缸、对射光电 PE 动态激光束（被工件遮挡时光束截断并变红）。
+    - **动静分离与信号闭环**：输送带滚筒与气缸推拉**100% 响应 PLC 真实回传的 DO 输出**，PLC 输出 1 则运动，0 则停止，严禁前端伪造常转动画；工件到位时自动向 PLC 写入 DI。
+
+## 9. AI Agent 交付规范与最终回复模板 (Agent Delivery Response Standard)
+
+当 AI 完成数字孪生任务后，向人类用户交付的回复**必须严格遵循以下结构**，保持极致的人类友好：
+
+```markdown
+### 1. 产线机电拓扑与信号流向
+- **现场输入 ➔ PLC (DI)**：按钮、光电检测 PE1、气缸到位反馈（工件到位时由网页自动回写 PLC，操作台提供单步点动测试通道）
+- **PLC 输出 ➔ 现场 (DO)**：输送带运转、推料气缸电磁阀、三色运行灯（由 PLC 逻辑真实控制，网页纯读取驱动机构动画）
+
+### 2. 三种无门槛启动方式（完全无需敲任何命令行）
+- **方式 1：桌面图标一键直达（日常最推荐）**：
+  - 首次双击运行项目目录下的 `make_shortcut.bat`，会在 Windows 桌面上生成【TIA Web 3D Twin】快捷方式；
+  - 以后在桌面上直接双击该图标，浏览器便会自动弹开展开 3D 产线。
+- **方式 2：目录双击启动**：
+  - 打开工程文件夹，直接鼠标双击 `start.bat`，服务自动就绪并自动唤起浏览器。
+- **方式 3：后台静默常驻（完全无黑窗口）**：
+  - 双击 `start_silent.bat`，黑窗口 3 秒后自动消失，服务在后台静默运行；
+  - 浏览器访问 `http://127.0.0.1:8000/?ws=ws%3A%2F%2F127.0.0.1%3A8765%2Fws`（可存为书签，车间平板同网段也可访问）；
+  - 需要停止时双击 `stop.bat` 即可干净关闭。
+
+### 3. 连接真实硬件 PLC 或 PLCSIM Advanced（两步完成）
+1. **博途 PLC 侧导入数据块**：
+   - 博途项目树展开：`外部源文件` ➔ 双击 `添加新的外部源文件` ➔ 选择项目中的 `TwinIO.scl`；
+   - 右键该源文件 ➔ 选择 **“从源生成块”**，生成非优化 DB1；
+   - 检查 CPU 属性【保护与安全】➔【连接机制】已勾选 **“允许来自远程对象的 PUT/GET 通信访问”**；
+   - 下载程序到 PLC 并将 CPU 置于 RUN 模式。
+2. **网页一键连接**：
+   - 浏览器右上角点击 **“连接 PLC”**；
+   - **设备目标类型**：选择实体机型（S7-1200 / S7-1500 / S7-300）或 PLCSIM Advanced；
+   - **PLC IP 地址**：输入真实 PLC 的物理 IP（如 `192.168.0.10`）或仿真器 IP（如 `192.168.0.1`）；
+   - 点击 **“连接 PLC”**，即可实时完成双向闭环通讯！
+```
+
+## 10. 验收清单
 
 - [ ] `validate_manifest.py` 返回 OK。
 - [ ] 生成的 `TwinIO.scl` 偏移与 manifest 完全一致。
@@ -220,14 +389,14 @@ python tia_gateway.py --config gateway.config.json --wait-plc
 - [ ] 页面没有硬编码地址；没有在真实模式重复 PLC 逻辑；没有逐帧写 PLC；未暴露网关 URL/Token。
 - [ ] 明确标注仿真用途，未宣称未经实测的 PLC 联调结果。
 
-## 9. 边界
+## 11. 边界
 
-- v1 只支持 **S7comm/snap7 + 单 DB + 标量 tag**；不支持 OPC UA、数组、字符串、跨 DB。
+- 通信支持 **S7comm/snap7 + 多 DB / 跨 DB 原生支持 + 标量 tag**（支持任意 DB1..DB65535 独立分区）；不支持 OPC UA、动态数组、字符串。
 - 不支持安全功能；急停按钮只是教学仿真信号。
 - 不能保证所有 PLCSIM Advanced 版本/固件都允许 S7comm；先用 TIA 监视表验证，再联调网页。
 - 遇到优化 DB、PUT/GET 关闭、虚拟网卡选择错误时，网关会报通信错误；先修 PLC 配置，不要改代码绕过。
 
-## 10. 资源
+## 12. 资源
 
 - `references/contract.md`：manifest 与 WebSocket 协议完整定义。
 - `references/tia-setup-guide.md`：PLCSIM Advanced / TIA / DB / 排错。
