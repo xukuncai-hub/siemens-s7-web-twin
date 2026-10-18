@@ -1,0 +1,50 @@
+// ==============================================================================
+// TIA Portal 外部源文件: TwinDemoLogic.scl
+// 工程项目: sorting-line
+// 配套示例控制逻辑（可在 OB1 'Main' 中直接调用）
+// 说明：导入博途 -> 外部源文件 -> 添加此文件 -> 右键'从源文件生成块'
+// 调用方法：在 OB1 中插入一行: "TwinDemoLogic"(); 即可驱动数字孪生！
+// ==============================================================================
+
+FUNCTION "TwinDemoLogic" : Void
+{ S7_Optimized_Access := 'FALSE' }
+VERSION : 0.1
+VAR_TEMP
+END_VAR
+
+BEGIN
+   // ---------------------------------------------------------------------------
+   // 1. 启停与急停控制 (Start / Stop / E-Stop Latch)
+   // ---------------------------------------------------------------------------
+   IF "TwinIO".cmd_estop THEN
+      "TwinIO".line_running := FALSE;
+      "TwinIO".out_cyl := FALSE;
+      "TwinIO".stack_green := FALSE;
+   ELSIF "TwinIO".cmd_start THEN
+      "TwinIO".line_running := TRUE;
+      "TwinIO".stack_green := TRUE;
+   ELSIF "TwinIO".cmd_stop THEN
+      "TwinIO".line_running := FALSE;
+      "TwinIO".out_cyl := FALSE;
+      "TwinIO".stack_green := FALSE;
+   END_IF;
+
+   // ---------------------------------------------------------------------------
+   // 2. 输送带运转中：物料感应触发分拣推料与计数
+   // ---------------------------------------------------------------------------
+   IF "TwinIO".line_running AND "TwinIO".sensor_pe1 THEN
+      "TwinIO".out_cyl := TRUE;
+      "TwinIO".box_count := "TwinIO".box_count + 1;
+   ELSE
+      "TwinIO".out_cyl := FALSE;
+   END_IF;
+
+   // ---------------------------------------------------------------------------
+   // 3. 复位命令清零分拣计数器
+   // ---------------------------------------------------------------------------
+   IF "TwinIO".cmd_reset THEN
+      "TwinIO".box_count := 0;
+      "TwinIO".out_cyl := FALSE;
+   END_IF;
+
+END_FUNCTION

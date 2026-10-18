@@ -21,6 +21,9 @@
 
 * **双目标原生支持**：底层基于工业级 S7comm 协议（ISO-on-TCP，默认端口 102），一套代码**无缝支持真实西门子硬件 PLC 与虚拟 PLCSIM Advanced**。
 * **动静分离，纯信号驱动**：控制逻辑严格保留在 PLC 内部；网页只负责机构运动、光电传感器计算与实时展示。PLC 输出 1 则运动，0 则停止，严禁前端伪造虚假常转动画。
+* **双用途原生支持：工业现场纯监控 vs 虚拟教学实训**：
+  - **模式 A：工业现场纯监控看板 (SCADA/HMI)**：连接工厂真实运行产线，纯只读监控 Q/I/M/DB 状态、速度与产量，**严禁回写虚拟传感器**，零侵入原有控制系统。
+  - **模式 B：虚拟产线闭环教学实训 (Digital Twin Training)**：面向无实体机构的裸机 PLC 或 PLCSIM，网页作为被控对象，物料到位后自动向非优化 DB (`TwinIO`) 回写虚拟传感器信号；配套自动生成 `TwinDemoLogic.scl` 示例程序，OB1 一键调用秒级联调。
 * **通信扫描周期自由可调 (50ms / 100ms)**：
   - **`50 ms (20 Hz · 高速响应)`**：机构物理孪生首选，气缸推拉、高速光电对射检测与碰撞几乎**零延迟**，动作丝滑顺畅。
   - **`100 ms (10 Hz · 工业标准)`**：经典工业 SCADA / HMI 推荐节拍，网络通信包少，CPU 占用极低，对通信处理机（CP）最温和。
@@ -57,7 +60,7 @@ python scripts/make_project.py --out ./my-sorting-line-2d
 
 ---
 
-## 🌟 核心规范与“4合1”工业交付体系
+## 🌟 核心规范与“5合1”工业交付体系
 
 ```mermaid
 graph LR
@@ -78,7 +81,7 @@ graph LR
     subgraph Siemens ["西门子控制层 (PLC)"]
         PLCTarget["真实 S7-1200/1500/300 或 PLCSIM Advanced"]
         DB["TwinIO.scl (非优化访问 DB 块)"]
-        Logic["用户 PLC 控制程序 (梯形图/SCL)"]
+        Logic["TwinDemoLogic.scl / 用户控制程序"]
         PLCTarget --- DB
         DB --- Logic
     end
@@ -89,8 +92,9 @@ graph LR
 
 1. **`twin.manifest.json`（统一信号契约）**：声明每个变量的 ID、PLC 绝对地址（如 `DB1.DBX0.0`、`DB1.DBB1`）、数据类型（Bool, Byte, Real, Int16）、读写权限（r/w/rw）与写模式（pulse 点动 / level 电平）。
 2. **`TwinIO.scl`（博途非优化 DB 源码）**：由 `generate_scl.py` 根据 manifest 自动生成，强制声明 `{ S7_Optimized_Access := 'FALSE' }`，在博途中一键生成 DB1。
-3. **`tia-twin-client.js`（零依赖前端客户端）**：网页直接引入，内置断线重连、心跳保活、延迟显示（RTT）、信号监听（`client.on('tag:id', cb)`）与点动控制（`client.pulse('cmd.start')`）。
-4. **`tia_gateway.py`（通用桥接网关）**：基于 `python-snap7` 和 `websockets`，采用差量扫描引擎（仅在变量变动时广播 JSON），支持通过 `plc.configure` 运行时热切换目标 PLC。
+3. **`TwinDemoLogic.scl`（博途配套示例控制程序）**：与 DB 同步生成，内置启停自锁、光电感应推料延时、复位与计数逻辑。在博途 OB1 中插入一行 `"TwinDemoLogic"();` 即可立即让 3D 产线跑起来，彻底解决首次连上真实 PLC 时“因 PLC 内部无逻辑导致画面静止”的冷启动断层。
+4. **`tia-twin-client.js`（零依赖前端客户端）**：网页直接引入，内置断线重连、心跳保活、延迟显示（RTT）、信号监听（`client.on('tag:id', cb)`）与点动控制（`client.pulse('cmd.start')`）。
+5. **`tia_gateway.py`（通用桥接网关）**：基于 `python-snap7` 和 `websockets`，采用差量扫描引擎（仅在变量变动时广播 JSON），支持通过 `plc.configure` 运行时热切换目标 PLC。
 
 ---
 
@@ -103,8 +107,8 @@ siemens-s7-web-twin/
 ├── scripts/
 │   ├── make_project.py              # 一键脚手架：自动装配 2D/3D 孪生工程与内置便携运行时
 │   ├── tia_gateway.py               # WebSocket <-> S7comm (Snap7) / Mock 高性能网关 (支持 50ms/100ms 动态扫描)
-│   ├── generate_scl.py              # 从 manifest 一键生成博途 SCL 外部源文件
-│   ├── validate_manifest.py         # 信号清单校验脚本 (地址对齐、重叠检测)
+│   ├── generate_scl.py              # 从 manifest 一键生成博途 DB 与控制逻辑 SCL 外部源文件
+│   ├── validate_manifest.py         # 信号清单校验脚本 (地址对齐、重叠与读写字节隔离检测)
 │   ├── run_twin.py                  # 服务管理与浏览器自动唤起启动器
 │   ├── start.bat                    # Windows 极简启动器 (优先调用 ./runtime/ 绿色运行环境)
 │   ├── make_shortcut.bat            # 原生 PowerShell 桌面快捷方式生成器
@@ -128,7 +132,8 @@ siemens-s7-web-twin/
 │   │   ├── index.html / app.js / styles.css (含 50ms/100ms 扫描周期切换器)
 │   │   └── vendor/                  # 本地离线 Three.js 核心库 (OrbitControls 等)
 │   └── tia/
-│       └── TwinIO.scl               # 自动生成的博途非优化 DB1 外部源文件
+│       ├── TwinIO.scl               # 自动生成的博途非优化 DB1 外部源文件
+│       └── TwinDemoLogic.scl        # 自动生成的博途配套示例控制逻辑 (OB1 直接调用)
 └── references/
     ├── contract.md                  # tia-web-twin/1 WebSocket 通信协议规范 (含 poll.rate)
     ├── deployment.md                # 部署与无环境/无终端方案说明 (含 Win11 24H2 避坑与绿色便携包)
@@ -145,9 +150,11 @@ siemens-s7-web-twin/
 * **真实 PLC**：网线直连，将电脑网卡 IP 改为与 PLC 同一网段（例如 PLC 为 `192.168.0.10`，电脑设为 `192.168.0.100`），CMD 中 `ping` 测试通过。
 * **PLCSIM Advanced**：Online Access 必须选择 **`Siemens PLCSIM Virtual Ethernet Adapter`**（严禁选 Softbus），启动实例并分配 IP（如 `192.168.0.1`）。
 
-### 2. 博途 (TIA Portal) 关键属性
+### 2. 博途 (TIA Portal) 关键属性与程序导入
 * **放行 PUT/GET 通信**：打开 CPU 设备组态 -> **属性** -> **防护与安全** -> **连接机制** -> 勾选 **“允许来自远程对象的 PUT/GET 通信访问”**（真实 PLC 必勾！）。
-* **导入数据块**：将工程生成的 `TwinIO.scl` 加入博途“外部源文件”，右键点击 **“从源生成块”**。确认生成的 DB 为非优化数据块，编译并下载到 CPU，将 CPU 拨到 **RUN** 模式。
+* **导入数据块**：将工程生成的 `TwinIO.scl` 加入博途“外部源文件”，右键点击 **“从源生成块”**。确认生成的 DB 为非优化数据块（核对编号是否为 DB1）。
+* **导入示例控制程序（可选，1 分钟闭环测试）**：将 `TwinDemoLogic.scl` 同样加入外部源文件并生成 FC 块，在主循环组织块 **OB1 ("Main")** 中插入一行 `"TwinDemoLogic"();`。
+* **编译并下载**：全部编译并下载到 CPU，将 CPU 拨到 **RUN** 绿灯模式。
 
 ### 3. 网页连接与扫描周期设置
 打开 3D 数字孪生页面：
@@ -158,11 +165,13 @@ siemens-s7-web-twin/
 
 ---
 
-## 🛡️ Windows 11 24H2 系统避坑要点
+## 🛡️ 工业通讯与 Windows 11 24H2 避坑要点
 
-1. **废弃 VBScript**：全面淘汰 `.vbs` 脚本，改用纯 7-bit ASCII `.bat` 与 PowerShell 实现无黑窗静默运行；
-2. **避免单文件 exe 临时目录拦截**：Win11 24H2 严格拦截第三方单文件向 `%TEMP%` 动态解压二进制（报 `Could not create temporary directory!`），日常使用推荐原生批处理与桌面快捷方式；
-3. **避免跨盘符虚拟环境 DLL 加载失败**：非系统盘创建 `.venv` 易触发 `_ctypes` DLL 初始化失效，启动脚本原生优先复用宿主机 Python 环境。
+1. **废弃 VBScript**：全面淘汰 `.vbs` 脚本，改用纯 7-bit ASCII `.bat` 与原生 PowerShell 实现无黑窗静默运行；
+2. **避免单文件 exe 临时目录拦截**：Win11 24H2 严格拦截第三方单文件向 `%TEMP%` 动态解压二进制（报 `Could not create temporary directory!`），日常使用推荐原生批处理与桌面快捷方式，或 `--onedir` 文件夹打包；
+3. **避免跨盘符虚拟环境 DLL 加载失败**：非系统盘创建 `.venv` 易触发 `_ctypes` DLL 初始化失效。启动脚本原生**优先加载自带 20MB 绿色便携环境（./runtime/）**，无便携包时无缝回退至物理机 Python，杜绝跨盘符 DLL 冲突；
+4. **严禁向物理输入区（%I）直写**：PLC 扫描周期起始阶段以微秒级硬件中断执行“过程映像输入 (PII)”刷新，强写 `%I` 会在微秒内被悬前端子置 0。虚拟传感器必须写入非优化数据块（`TwinIO` DB）供 PLC 逻辑读取；
+5. **读写字节严格隔离（Byte Isolation）**：S7comm 底层位写入为字节级“读-改-写 (Read-Modify-Write)”。严禁在同一字节内混排只读位（`r`）与写入位（`w`），防止上位机回写覆盖 PLC 刚更新的输出。
 
 ---
 

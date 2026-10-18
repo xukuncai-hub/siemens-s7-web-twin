@@ -106,7 +106,7 @@ def validate(path: Path):
     if not isinstance(tags, list) or not tags:
         return errors + ["tags 必须是非空数组"], warnings
     ids, addrs = set(), set()
-    intervals_by_db, bool_bytes_by_db = {}, {}
+    intervals_by_db, bool_bytes_by_db, byte_access_by_db = {}, {}, {}
     writable = readable = 0
     parsed = []
     for i, tag in enumerate(tags):
@@ -162,6 +162,7 @@ def validate(path: Path):
         if kind == "DBD" and byte % 4:
             errors.append(f"{label}: DBD 偏移 {byte} 不是 4 字节对齐")
         size = SIZE_FOR_TYPE[typ]
+        byte_access_by_db.setdefault(tdb, {}).setdefault(byte, []).append((label, access))
         if kind == "DBX":
             bool_bytes_by_db.setdefault(tdb, []).append(byte)
         else:
@@ -184,6 +185,16 @@ def validate(path: Path):
         for b in sorted(set(bool_bytes_by_db.get(d, []))):
             if b in occupied:
                 errors.append(f"DB{d} 布尔位所在字节 {b} 与标量 {occupied[b]} 重叠")
+    # 读写字节隔离检查：同一字节内混排 r（只读）与 w/rw（写入）可能发生 S7comm 读改写覆盖风险
+    for d, bytes_map in byte_access_by_db.items():
+        for b, items in bytes_map.items():
+            r_items = [lbl for lbl, acc in items if acc == "r"]
+            w_items = [lbl for lbl, acc in items if acc in ("w", "rw")]
+            if r_items and w_items:
+                warnings.append(
+                    f"DB{d}.DBB{b} 读写字节混排：该字节同时包含只读位 ({', '.join(r_items)}) 与写入位 ({', '.join(w_items)})。"
+                    f"工业最佳实践建议读写字节隔离（输入独立字节，输出独立字节），避免 S7comm 位写入发生 Read-Modify-Write 覆盖。"
+                )
     bindings = data.get("bindings")
     if not isinstance(bindings, list) or not bindings:
         errors.append("bindings 必须是非空数组")

@@ -167,6 +167,90 @@ def generate_scl(manifest_data: dict) -> str:
     return "\n".join(lines)
 
 
+def generate_demo_logic(manifest_data: dict) -> str:
+    plc_cfg = manifest_data.get("plc", {})
+    db_name = plc_cfg.get("dbName", "TwinIO")
+    project = manifest_data.get("project", "twin")
+    tags = {t["id"]: t for t in manifest_data.get("tags", [])}
+
+    lines = []
+    lines.append("// ==============================================================================")
+    lines.append(f"// TIA Portal 外部源文件: TwinDemoLogic.scl")
+    lines.append(f"// 工程项目: {project}")
+    lines.append("// 配套示例控制逻辑（可在 OB1 'Main' 中直接调用）")
+    lines.append("// 说明：导入博途 -> 外部源文件 -> 添加此文件 -> 右键'从源文件生成块'")
+    lines.append(f"// 调用方法：在 OB1 中插入一行: \"TwinDemoLogic\"(); 即可驱动数字孪生！")
+    lines.append("// ==============================================================================")
+    lines.append("")
+    lines.append('FUNCTION "TwinDemoLogic" : Void')
+    lines.append("{ S7_Optimized_Access := 'FALSE' }")
+    lines.append("VERSION : 0.1")
+    lines.append("VAR_TEMP")
+    lines.append("END_VAR")
+    lines.append("")
+    lines.append("BEGIN")
+    lines.append("   // ---------------------------------------------------------------------------")
+    lines.append("   // 1. 启停与急停控制 (Start / Stop / E-Stop Latch)")
+    lines.append("   // ---------------------------------------------------------------------------")
+
+    has_estop = "cmd.estop" in tags
+    has_start = "cmd.start" in tags
+    has_stop = "cmd.stop" in tags
+    has_run = "line.running" in tags
+    has_green = "stack.green" in tags
+    has_pe1 = "sensor.pe1" in tags
+    has_cyl = "out.cyl" in tags
+    has_cnt = "box.count" in tags
+    has_reset = "cmd.reset" in tags
+
+    if has_estop or has_start or has_stop:
+        if has_estop:
+            lines.append(f'   IF "{db_name}".cmd_estop THEN')
+            if has_run: lines.append(f'      "{db_name}".line_running := FALSE;')
+            if has_cyl: lines.append(f'      "{db_name}".out_cyl := FALSE;')
+            if has_green: lines.append(f'      "{db_name}".stack_green := FALSE;')
+            lines.append(f'   ELSIF "{db_name}".cmd_start THEN')
+        elif has_start:
+            lines.append(f'   IF "{db_name}".cmd_start THEN')
+        if has_run: lines.append(f'      "{db_name}".line_running := TRUE;')
+        if has_green: lines.append(f'      "{db_name}".stack_green := TRUE;')
+        if has_stop:
+            lines.append(f'   ELSIF "{db_name}".cmd_stop THEN')
+            if has_run: lines.append(f'      "{db_name}".line_running := FALSE;')
+            if has_cyl: lines.append(f'      "{db_name}".out_cyl := FALSE;')
+            if has_green: lines.append(f'      "{db_name}".stack_green := FALSE;')
+        lines.append('   END_IF;')
+        lines.append("")
+
+    lines.append("   // ---------------------------------------------------------------------------")
+    lines.append("   // 2. 输送带运转中：物料感应触发分拣推料与计数")
+    lines.append("   // ---------------------------------------------------------------------------")
+    if has_pe1 and has_cyl:
+        cond = f'"{db_name}".line_running AND "{db_name}".sensor_pe1' if has_run else f'"{db_name}".sensor_pe1'
+        lines.append(f'   IF {cond} THEN')
+        lines.append(f'      "{db_name}".out_cyl := TRUE;')
+        if has_cnt:
+            lines.append(f'      "{db_name}".box_count := "{db_name}".box_count + 1;')
+        lines.append('   ELSE')
+        lines.append(f'      "{db_name}".out_cyl := FALSE;')
+        lines.append('   END_IF;')
+        lines.append("")
+
+    if has_reset and has_cnt:
+        lines.append("   // ---------------------------------------------------------------------------")
+        lines.append("   // 3. 复位命令清零分拣计数器")
+        lines.append("   // ---------------------------------------------------------------------------")
+        lines.append(f'   IF "{db_name}".cmd_reset THEN')
+        lines.append(f'      "{db_name}".box_count := 0;')
+        if has_cyl: lines.append(f'      "{db_name}".out_cyl := FALSE;')
+        lines.append('   END_IF;')
+        lines.append("")
+
+    lines.append("END_FUNCTION")
+    lines.append("")
+    return "\n".join(lines)
+
+
 def main():
     manifest_path = sys.argv[1] if len(sys.argv) > 1 else "twin.manifest.json"
     output_path = sys.argv[2] if len(sys.argv) > 2 else "TwinIO.scl"
@@ -186,8 +270,14 @@ def main():
 
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(scl_content)
+    print(f"成功生成 SCL 数据块: {output_path}")
 
-    print(f"成功生成 SCL 文件: {output_path}")
+    # 配套生成博途示例控制逻辑块 TwinDemoLogic.scl
+    logic_path = os.path.join(out_dir, "TwinDemoLogic.scl") if out_dir else "TwinDemoLogic.scl"
+    logic_content = generate_demo_logic(data)
+    with open(logic_path, "w", encoding="utf-8") as f:
+        f.write(logic_content)
+    print(f"成功生成配套 SCL 控制程序: {logic_path}")
 
 
 if __name__ == "__main__":
