@@ -1,5 +1,5 @@
 ---
-name: plcsim-web-twin
+name: siemens-s7-web-twin
 description: 生成可直接连接西门子真实实体 S7 PLC (S7-1200 / S7-1500 / S7-300) 以及博途 PLCSIM Advanced 的网页产线数字孪生。用于制作 2D/3D 产线仿真、教学 HMI、虚拟调试页面，通过固定 twin.manifest.json 契约、浏览器 WebSocket SDK 和 Python snap7 网关，把网页传感器回写给实体 PLC / 仿真 PLC。触发词：数字孪生、产线仿真、真实PLC、实体PLC、S7-1200、S7-1500、PLCSIM Advanced、博途仿真、S7comm、虚拟调试、Three.js/Canvas 连 PLC。
 ---
 
