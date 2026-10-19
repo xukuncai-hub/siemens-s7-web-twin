@@ -365,5 +365,6 @@
     return client;
   }
 
+  global.TiaTwinClient = TiaTwinClient;
   global.TiaTwin = { create, loadManifest: TiaTwinClient.loadManifest, TiaTwinClient, version: VERSION, protocol: PROTOCOL };
 })(window);

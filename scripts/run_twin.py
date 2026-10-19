@@ -38,6 +38,13 @@ def free_port(preferred: int) -> int:
 
 
 class QuietHandler(SimpleHTTPRequestHandler):
+    def end_headers(self):
+        # 强制禁用浏览器强缓存，防止 Edge/Chrome 缓存旧版 ES 模块导致改动不生效
+        self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+        self.send_header("Pragma", "no-cache")
+        self.send_header("Expires", "0")
+        super().end_headers()
+
     def log_message(self, fmt, *args):
         pass
 
