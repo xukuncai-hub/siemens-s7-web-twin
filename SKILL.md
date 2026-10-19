@@ -142,7 +142,15 @@ AI 接收到用户需求时，必须第一时间识别并确定用户属于以�
       - 新手工程师导入 DB 连上真实 PLC 后，常困惑“为什么网页连上了但画面一动不动？”——根本原因在于其 PLC 内尚未编写梯形图控制逻辑，DB 输出全为 0。
       - `generate_scl.py` 在生成 `TwinIO.scl` 数据块的同时，自动配套生成一份 `TwinDemoLogic.scl` 示例控制功能块（含启停自锁、PE1 触发气缸推料、计数与复位）。用户只需在博途 OB1 中插入一行 `"TwinDemoLogic"();` 下载，即可在 1 分钟内完成首轮活体闭环联调！
 
+- **3D 呈现技术路径决策（外部 CAD 导入 vs 代码参数化工程推演）**：
+  - **路径 1（首选 · 工业高保真）：外部工业 CAD 模型 (SolidWorks / GLTF) 契约导入**：
+    - 若用户已有机械模型导出的 `.glb` / `.gltf` 文件，**严禁强行让 AI 在网页端手写粗糙几何体**；
+    - AI 直接将模型置于项目中，在 `twin.manifest.json` 中配置 `cadModel` 与 `bindings` 节点映射，利用内置的 `vendor/GLTFLoader.js` 完成自动驱动。详见 `references/cad-import-guide.md`。
+  - **路径 2（备选 · 简易逻辑实训）：有限资料下的机械结构合理化推导**：
+    - 若用户无现成 CAD 资料，AI 必须严格执行下述 **步骤 1.5**，自主推导全线标高基准链（如 $Y_0=0.782\text{m}$）、传力链生根（4040/4020型材）与斜槽动力学校验，杜绝悬浮零件与卡料。
+
 ### 步骤 1：产线机电对象与信号流向分析
+
 AI 在动手写代码或 manifest 前，必须在思考与回答中显式完成以下三张清单梳理：
 1. **执行机构清单（Actuators，归入 PLC 输出 ➔ 现场）**：
    - 输送系统：主输送带电机（`line.running`）、分拣输送带、转台
@@ -485,7 +493,15 @@ python tia_gateway.py --config gateway.config.json --wait-plc
       - 现象：频繁重启后台网关或静态服务导致浏览器弹出“网络连接断开”或访问一半中断。
       - 规则：8000 与 8765 服务必须保持常驻运行与心跳重连，静态代码更新时无需频繁杀死 Python 进程，充分利用 `no-cache` 特性实现页面即刷即生效。
 
+16. **工业 CAD (SolidWorks/GLTF) 模型导入与契约绑定优先准则（专业模型走专业 CAD）**：
+    - **核心认知**：当用户具备现有产线 3D 图纸（或对工业视觉拟真度要求极高）时，**严禁强行让 AI 在网页端手写粗糙几何体**！三维空间网格建模从来不是 LLM 的强项。
+    - **架构解耦（各司其职）**：
+      - **机械设计师**：负责在 SolidWorks / Inventor / Blender 中设计 1:1 装配体并导出单个 `.glb` 文件（视觉效果 100% 工业级，含真实倒角、钣金折弯与五金螺栓）；
+      - **AI 与上位机**：负责编写 `twin.manifest.json` 中的 `cadModel` 与 `bindings`，将模型中的动件节点（如 `Actuator_Pusher`、`Light_Green`、`Sensor_PE1`）与西门子 PLC 的 S7comm 变量自动挂接；
+      - **内置离线驱动引擎**：工程模板已内置离线单文件 `vendor/GLTFLoader.js`，支持毫米/米自适应缩放、自动遍历节点树并实时驱动平移、旋转、贴图滚动与发光变色。详见 `references/cad-import-guide.md`。
+
 ## 9. AI Agent 交付规范与最终回复模板 (Agent Delivery Response Standard)
+
 
 
 当 AI 完成数字孪生任务后，向人类用户交付的回复**必须严格遵循以下结构**，保持极致的人类友好：
@@ -545,8 +561,10 @@ python tia_gateway.py --config gateway.config.json --wait-plc
 - `references/contract.md`：manifest 与 WebSocket 协议完整定义。
 - `references/tia-setup-guide.md`：PLCSIM Advanced / TIA / DB / 排错。
 - `references/deployment.md`：双击启动、Windows 单文件 exe、Windows 服务三种部署方式。
+- `references/cad-import-guide.md`：工业 CAD (SolidWorks/Inventor) 模型导出、节点命名契约与 PLC 信号绑定指南。
 - `assets/template/`：2D 操作台示例（离线数据编辑 + PLC 连接）。
 - `assets/three-demo/`：3D 产线示例，使用同一 manifest/SDK/网关。
+- `assets/three-demo/vendor/GLTFLoader.js`：零依赖纯离线工业 GLTF/GLB 模型加载器。
 - `scripts/run_twin.py`：一条命令启动页面 + 网关。
 - `assets/runtime/tia-twin-client.js`：固定浏览器 SDK。
 - `scripts/tia_gateway.py`：S7comm WebSocket 网关。

@@ -29,6 +29,9 @@
   - **全线标高基准链统一**：推导工件承托面基准标高 $Y_0$（如统一为 $0.782\text{m}$），消除工站流转阶梯错位；
   - **运动包络与动力学校验**：转台外围构件避让回转包络线，滑槽按牛顿第二定律倾角自滑（$22^\circ$），末端配置缓冲止挡；
   - **120Hz 离线真物理**：告别插值假动画，采用 120Hz 离线刚体微步长求解、材质接触摩擦矩阵与 3D Raycast 光电传感器。
+* **工业 CAD (SolidWorks/GLTF) 导入契约优先（告别网页手写建模）**：
+  - **各司其职**：机械设计师在 SolidWorks / Inventor 中导出 1:1 工业装配体（`.glb`），视觉效果与尺寸精度 100% 工业级；
+  - **纯契约驱动**：AI 无需在网页手写脆弱几何代码，内置纯离线单文件 `GLTFLoader.js`，通过 `twin.manifest.json` 将节点名称（如推杆、皮带、信号灯）与 S7comm 变量自动挂接驱动。详见 [references/cad-import-guide.md](references/cad-import-guide.md)。
 * **通信扫描周期自由可调 (50ms / 100ms)**：
   - **`50 ms (20 Hz · 高速响应)`**：机构物理孪生首选，气缸推拉、高速光电对射检测与碰撞几乎**零延迟**，动作丝滑顺畅。
   - **`100 ms (10 Hz · 工业标准)`**：经典工业 SCADA / HMI 推荐节拍，网络通信包少，CPU 占用极低，对通信处理机（CP）最温和。
@@ -135,12 +138,13 @@ siemens-s7-web-twin/
 │   │   └── gateway.config.json
 │   ├── three-demo/                  # 3D Three.js 现代化工业产线模板工程
 │   │   ├── index.html / app.js / styles.css (含 50ms/100ms 扫描周期切换器)
-│   │   └── vendor/                  # 本地离线 Three.js 核心库 (OrbitControls 等)
+│   │   └── vendor/                  # 本地离线 Three.js 核心库 (含零依赖 GLTFLoader.js 工业模型加载器)
 │   └── tia/
 │       ├── TwinIO.scl               # 自动生成的博途非优化 DB1 外部源文件
 │       └── TwinDemoLogic.scl        # 自动生成的博途配套示例控制逻辑 (OB1 直接调用)
 └── references/
     ├── contract.md                  # tia-web-twin/1 WebSocket 通信协议规范 (含 poll.rate)
+    ├── cad-import-guide.md          # 工业 CAD (SolidWorks/GLTF) 模型导入与 PLC 信号绑定指南
     ├── deployment.md                # 部署与无环境/无终端方案说明 (含 Win11 24H2 避坑与绿色便携包)
     └── tia-setup-guide.md           # 实体真实 PLC 与 PLCSIM Advanced 关键配置手册
 ```
