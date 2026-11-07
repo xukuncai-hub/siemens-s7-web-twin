@@ -1,204 +1,238 @@
-# Siemens S7 Web Twin (S7comm: 真实硬件 PLC + PLCSIM)
+<div align="center">
 
-> **西门子PLC (S7-1200 / S7-1500 / S7-300) 与 PLCSIM Advanced 数字孪生产线协同开发规范与工具链**  
-> *A standardized AI Skill & Toolkit bridging Web 2D/3D Digital Twins and Siemens S7 Hardware PLCs / PLCSIM Advanced via S7comm.*
+# 🏭 Web Digital Twin for Industrial Automation
+### 现代化工业产线 Web 数字孪生 & 多协议控制协同平台
+
+> **一站式工业级被控对象数字孪生体系 · 面向西门子 S7、Modbus TCP/RTU、RS-485、原始 TCP/IP 与 AI 自主扩展**  
+> *A standardized Industrial Digital Twin & Multi-Protocol Gateway bridging Web 3D/2D Interfaces and Physical PLCs / Simulators.*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python: 3.10+](https://img.shields.io/badge/Python-3.10+-brightgreen.svg)](https://python.org)
-[![Siemens: S7-1200 / S7-1500 / S7-300 / PLCSIM](https://img.shields.io/badge/Siemens-S7--1200%20%7C%20S7--1500%20%7C%20PLCSIM-orange.svg)](https://support.industry.siemens.com)
-[![Protocol: S7comm / WebSocket](https://img.shields.io/badge/Protocol-S7comm%20%2F%20WebSocket-blueviolet.svg)](references/contract.md)
-[![Platform: Windows 11 24H2 Ready](https://img.shields.io/badge/Windows%2011%2024H2-Ready-success.svg)](references/deployment.md)
+[![Siemens: S7-1200 / 1500 / 300](https://img.shields.io/badge/Siemens-S7--1200%20%7C%201500%20%7C%20300-orange.svg)](https://support.industry.siemens.com)
+[![Protocol: Modbus TCP / RTU](https://img.shields.io/badge/Protocol-Modbus%20TCP%20%2F%20RTU%20%2F%20RS--485-red.svg)](references/protocol-extension-guide.md)
+[![3D: Blender Native & GLTF](https://img.shields.io/badge/3D%20Assets-Blender%20%2F%20GLTF%202.0-E87D0D.svg)](references/blender-industrial-modeling.md)
+[![Platform: Windows 11 24H2 Ready](https://img.shields.io/badge/Windows%2011%2024H2-Certified-success.svg)](references/deployment.md)
+[![Zero Dependency Portable](https://img.shields.io/badge/Portable-20MB%20Runtime%20Builtin-teal.svg)](references/deployment.md)
+
+<p align="center">
+  <a href="#-核心四大跨越">核心跨越</a> •
+  <a href="#-统一系统架构">系统架构</a> •
+  <a href="#-建模双流派html-原生-vs-blender-高保真">建模双流派</a> •
+  <a href="#-多工业协议全互联--ai-扩展">多工业协议</a> •
+  <a href="#-快速开始">快速开始</a> •
+  <a href="#-完整交付体系">交付规范</a> •
+  <a href="#-避坑指南">避坑指南</a>
+</p>
+
+</div>
 
 ---
 
-## 📖 这个 Skill 解决什么
+## 🌟 核心四大跨越
 
-让 AI 生成的产线网页不再是“孤立的动画”，而是一个**遵循固定工业 I/O 契约的工业被控对象数字孪生模型**：
+让 AI 生产与前端工程中的数字孪生不再是“孤立展示的假动画”，而是**严格遵循工业 I/O 信号契约、具备真实物理反馈的闭环被控对象**：
 
-```text
-浏览器 3D/2D 数字孪生  ⇄  WebSocket JSON  ⇄  tia_gateway.py (Snap7/S7comm)  ⇄  真实 S7 PLC (S7-1200/1500/300) / PLCSIM Advanced
+| 维度 | 传统 Web 3D 页面 / 玩具动画 | 本方案工业级数字孪生体系 |
+| :--- | :--- | :--- |
+| **视觉呈现** | 纠结 2D 还是 3D，AI 手写粗糙几何体积木块 | **【HTML 原生建模】与【Blender 工业建模】双轨并行**，全面替代重型 CAD (NX/SolidWorks)，原生 PBR 质感 |
+| **底层通信** | 绑定单一厂商或重型 OPC UA，缺少现场轻量支持 | **原生多协议（S7comm / Modbus TCP / Modbus RTU / TCP-IP）**，协议解耦，AI 依规自主开发新驱动 |
+| **控制机理** | 前端写死常转动画，虚假运转，无反馈 | **动静分离，纯信号驱动**：PLC 输出 1 则动、0 则停；物料到位自动向 PLC 回写虚拟传感器信号 |
+| **交付门槛** | 依赖复杂 Node.js/Python 编译与环境变量 | **内置 ~20MB 绿色便携 Python 运行时**，Windows 11 24H2 零拦截，桌面图标一键直达，零敲命令行 |
+
+---
+
+## 🏗️ 统一系统架构
+
+```mermaid
+graph TD
+    subgraph Frontend ["Web 孪生前端 (网页渲染 & 物理闭环层)"]
+        UI_A["HTML 原生建模<br/>(Canvas / SVG / 参数化轻量代码)"]
+        UI_B["Blender 工业级建模<br/>(1:1 装配体 .glb / PBR 金属质感)"]
+        Physics["120Hz 离线真物理引擎<br/>(Raycast 激光探头 / 接触摩擦 / 重力自滑)"]
+        SDK["tia-twin-client.js (零依赖 WebSocket SDK)"]
+        
+        UI_A <--> SDK
+        UI_B <--> SDK
+        Physics <--> SDK
+    end
+
+    subgraph Gateway ["本地通信网关 (tia_gateway.py 统一差量调度引擎)"]
+        WS["WebSocket JSON (tia-web-twin/1 差量广播)"]
+        BaseDriver["BaseProtocolBackend (统一协议驱动抽象接口)"]
+        
+        subgraph Drivers ["已内置 & 可扩展协议驱动矩阵"]
+            D1["S7comm 驱动<br/>(西门子 S7-1200/1500/300)"]
+            D2["Modbus TCP 驱动<br/>(以太网 502 / 纯 Python 零依赖)"]
+            D3["Modbus RTU 驱动<br/>(RS-485 串口 / 变频器 / 仪表)"]
+            D4["Raw TCP/IP 驱动<br/>(流式套接字 / 工业扫码枪 / 自研板卡)"]
+            D5["★ AI 自主扩展新驱动<br/>(三菱MC / 欧姆龙FINS / MQTT)"]
+        end
+        
+        WS <--> BaseDriver
+        BaseDriver --> D1
+        BaseDriver --> D2
+        BaseDriver --> D3
+        BaseDriver --> D4
+        BaseDriver -.-> D5
+    end
+
+    subgraph Hardware ["控制硬件 & 仿真器层"]
+        PLC1["西门子硬件 PLC / PLCSIM Advanced"]
+        PLC2["Modbus 设备 / 汇川 / 信捷 / 施耐德"]
+        PLC3["RS-485 现场总线仪表 / 传感器"]
+        PLC4["工业相机 / 扫码枪 / 自研嵌入式板卡"]
+        
+        D1 <--> PLC1
+        D2 <--> PLC2
+        D3 <--> PLC3
+        D4 <--> PLC4
+    end
+
+    SDK -- "WebSocket JSON (tag:value 差量推送)" <--> WS
 ```
 
-* **双目标原生支持**：底层基于工业级 S7comm 协议（ISO-on-TCP，默认端口 102），一套代码**无缝支持真实西门子硬件 PLC 与虚拟 PLCSIM Advanced**。
-* **动静分离，纯信号驱动**：控制逻辑严格保留在 PLC 内部；网页只负责机构运动、光电传感器计算与实时展示。PLC 输出 1 则运动，0 则停止，严禁前端伪造虚假常转动画。
-* **双用途原生支持：工业现场纯监控 vs 虚拟教学实训**：
-  - **模式 A：工业现场纯监控看板 (SCADA/HMI)**：连接工厂真实运行产线，纯只读监控 Q/I/M/DB 状态、速度与产量，**严禁回写虚拟传感器**，零侵入原有控制系统。
-  - **模式 B：虚拟产线闭环教学实训 (Digital Twin Training)**：面向无实体机构的裸机 PLC 或 PLCSIM，网页作为被控对象，物料到位后自动向非优化 DB (`TwinIO`) 回写虚拟传感器信号；配套自动生成 `TwinDemoLogic.scl` 示例程序，OB1 一键调用秒级联调。
-* **有限资料下的机械合理化与 120Hz 刚体物理规范**：
-  - **零悬浮生根**：无 CAD 资料时，AI 自主配置 4040/4020 型材立柱、三角加强角码、底盘法兰与 T 槽底座，消除气缸/料仓/滑道空中悬浮；
-  - **全线标高基准链统一**：推导工件承托面基准标高 $Y_0$（如统一为 $0.782\text{m}$），消除工站流转阶梯错位；
-  - **运动包络与动力学校验**：转台外围构件避让回转包络线，滑槽按牛顿第二定律倾角自滑（$22^\circ$），末端配置缓冲止挡；
-  - **120Hz 离线真物理**：告别插值假动画，采用 120Hz 离线刚体微步长求解、材质接触摩擦矩阵与 3D Raycast 光电传感器。
-* **工业 3D 资产契约优先（Blender 替代 NX/SolidWorks 工业轻量化建模 + CAD 契约导入）**：
-  - **Blender 替代重型 CAD**：告别重型 CAD (NX/SolidWorks) 繁琐的百万级面数与破面转换痛苦，全面支持以 Blender 为核心的工业轻量化建模流（公制尺寸、草图约束、PBR 真实材质、动静分离与 Origin 轴心归正）；
-  - **纯契约驱动与零依赖加载**：内置纯离线单文件 `GLTFLoader.js`，通过 `twin.manifest.json` 将节点名称（如推杆、皮带、信号灯、传感器 Empty）与 S7comm 变量自动挂接驱动；
-  - **一键自检工具**：配套纯 Python 零依赖 `scripts/inspect_glb.py`，秒级解析模型节点树、校验尺寸比例并自动输出可直接粘贴的 `bindings` 契约配置。详见 [references/blender-industrial-modeling.md](references/blender-industrial-modeling.md) 与 [references/cad-import-guide.md](references/cad-import-guide.md)。
-* **多工业协议原生支持与 AI 自主扩展规范（S7comm / Modbus / RS-485 / TCP-IP / 三菱 / 欧姆龙）**：
-  - **分层解耦**：前端 Web 孪生画面与底层通信协议彻底解耦，无论硬件更换为哪种协议，前端页面代码 100% 无需修改；
-  - **原生内置四大协议**：原生内置西门子 S7comm (Snap7)、Modbus TCP (以太网 502 端口纯 Python 零依赖实现)、Modbus RTU (RS-485 串口)、Raw TCP/IP Socket 驱动；
-  - **AI 依规自主开发扩展**：当遇到三菱 MC、欧姆龙 FINS、MQTT、Beckhoff ADS 或私有十六进制协议时，AI Agent 严格按照 [references/protocol-extension-guide.md](references/protocol-extension-guide.md) 的标准驱动基类规范，自主编写适配器并无缝注册，10 分钟快速交付。
-* **通信扫描周期自由可调 (50ms / 100ms)**：
-  - **`50 ms (20 Hz · 高速响应)`**：机构物理孪生首选，气缸推拉、高速光电对射检测与碰撞几乎**零延迟**，动作丝滑顺畅。
-  - **`100 ms (10 Hz · 工业标准)`**：经典工业 SCADA / HMI 推荐节拍，网络通信包少，CPU 占用极低，对通信处理机（CP）最温和。
-  - **即切即生效**：网页顶部栏与连接弹窗均提供扫描周期下拉选择，左下角 HUD 实时显示通信周期，运行中动态切换无需重连。
-* **双模式开箱即用**：页面默认处于**离线仿真**（内置 Three.js 物理碰撞与 Mock 引擎，无需 PLC 即可单机演示）；点击“连接 PLC”即可热切换至**真实 S7 通信**。
-* **零环境依赖 / 绿色便携开箱即用**：脚手架自动内置 ~20MB 极简 Python 运行环境（预装 `snap7` 与 `websockets`），**现场目标工控机完全无需安装 Python、无需联网、无需配置环境变量、无需管理员权限**，拷贝即跑。
-* **零终端 / 无门槛交互**：完美规避 Windows 11 24H2 安全拦截与跨盘符虚拟环境陷阱，提供桌面图标一键直达，用户无需敲任何命令行。
+---
+
+## 🎨 建模双流派：HTML 原生 vs Blender 高保真
+
+彻底取消模糊的“2D 还是 3D”概念区分，以**工程资产生产链路**作为核心二选一决策：
+
+```text
+用户需求输入 ──► 需要建模时明确决策：
+                   ├──► 选项 A：【HTML 原生建模】 (纯代码秒级生成，零外部资产，最适合快速原型)
+                   └──► 选项 B：【Blender 工业建模】(替代重型 CAD，高保真 PBR .glb 资产，最适合现场交付)
+```
+
+### 1. HTML 原生建模 (`--mode html`)
+* **适用场景**：快速原型验证、轻量教学调试、无 3D 美术资产的纯代码极速开箱；
+* **技术特性**：AI 直接在前端通过 Canvas / SVG / 参数化 3D 代码生成；
+* **优势**：零外部模型依赖，无需安装任何 3D 软件，工程文件体积小（< 2MB），生成速度最快。
+
+### 2. Blender 工业级建模 (`--mode blender` · 替代 NX/SolidWorks)
+* **适用场景**：追求 100% 工业级实物真实度、高质感展台汇报、真实机械产线数字孪生；
+* **为什么彻底替代重型 CAD**：传统 CAD 导出的模型面数动辄数百万面、无法直接在 Web 渲染且丢失装配层级；Blender 支持使用 `CAD Sketcher` 草图约束，原生导出轻量 glTF 2.0 (`.glb`)，面数精准控制在 10~30 万面，原生 PBR 金属度/粗糙度质感；
+* **规范文档**：详见 [Blender 工业产线建模全流程指南](references/blender-industrial-modeling.md)。
+* **配套无依赖自检工具**：
+  ```bash
+  # 自动分析模型节点树、校验尺寸比例、自动生成 twin.manifest.json 中的 bindings 映射：
+  python scripts/inspect_glb.py assets/models/my_line.glb
+  ```
 
 ---
 
-## ⚡ 快速开始（AI 自动化生成）
+## 🌐 多工业协议全互联 & AI 依规自主扩展
 
-### 1. 开发者 / AI 一键生成项目
+前端 Web 孪生页面与底层工业通信协议**完全解耦**。前端只消费标准 WebSocket JSON，底层无论换成何种协议，页面逻辑与 3D 模型完全无需二次开发！
 
-AI Agent 在后台静默执行项目脚手架（严禁让用户在终端敲命令）：
+### 1. 原生内置协议矩阵
+* **西门子 S7comm (`protocol: "s7"`)**：底层基于 ISO-on-TCP (Port 102)，支持 S7-1200 / S7-1500 / S7-300 及 PLCSIM Advanced，读写非优化数据块 (`TwinIO` DB)；
+* **Modbus TCP (`protocol: "modbus-tcp"`)**：采用**纯 Python 异步实现**，零第三方库依赖，开箱即用支持 `0x/1x/3x/4x` 线圈与寄存器；
+* **Modbus RTU / RS-485 (`protocol: "modbus-rtu"`)**：支持串口通信（波特率、从机站号、奇偶校验），连接工业变频器、温控仪表；
+* **Raw TCP/IP Socket (`protocol: "tcp-raw"`)**：支持原始二进制字节流与定界符切包，直接连通工业扫码枪、视觉相机与单片机。
+
+### 2. AI 依规自主开发扩展新协议 (10 分钟交付)
+当遇到**三菱 MC 协议、欧姆龙 FINS、MQTT、Beckhoff ADS 或专有报文**时，指导 AI Agent 严格按照 [`references/protocol-extension-guide.md`](references/protocol-extension-guide.md) 的统一抽象基类 `BaseProtocolBackend`：
+1. 继承驱动基类，实现 `ensure_connected`、`read_all`、`write`、`status` 四大标准异步接口；
+2. 在网关工厂函数中注册新协议；
+3. **前端数字孪生与操作台即刻与新硬件连通**！
+
+---
+
+## ⚡ 快速开始
+
+### 1. 开发者 / AI Agent 一键脚手架
+
+在工程根目录执行脚手架（零终端门槛交付）：
 
 ```bash
-# 方式 1：Blender 工业级建模流（推荐高保真交付，支持 .glb 资产挂载与内置离线 vendor）
+# 模式 A：Blender 工业级高保真 3D 资产建模 (最推荐交付)
 python scripts/make_project.py --out ./my-sorting-line --mode blender
 
-# 方式 2：HTML 原生纯代码建模流（推荐极速原型，零外部文件依赖，秒级生成）
+# 模式 B：HTML 原生纯代码建模 (极速原型，零外部文件)
 python scripts/make_project.py --out ./my-sorting-line --mode html
 ```
 
 ### 2. 最终用户：3 种免终端启动方式（无需安装 Python）
 
-交付给用户的工程默认自带 20MB 绿色便携 Python 与纯 7-bit ASCII 启动器（100% 兼容 Windows 11 24H2）：
+交付给最终用户的工程目录**默认自带 20MB 绿色便携 Python 运行时**与纯 7-bit ASCII 启动器（100% 兼容 Windows 11 24H2）：
 
-| 方式 | 适合场景 | 操作方法 |
+| 启动方式 | 适用场景 | 操作步骤 |
 | :--- | :--- | :--- |
-| **方式 1：桌面图标一键直达** | **日常最推荐**，连目录都不用进 | 双击运行一次 `make_shortcut.bat` 在桌面生成快捷方式，以后在桌面直接双击图标秒开 |
-| **方式 2：目录双击启动** | 在项目文件夹内直接使用 | 双击运行 `start.bat`，优先直调自带绿色环境、启动双服务并自动唤起默认浏览器 |
-| **方式 3：后台静默常驻** | 讨厌黑窗口，或车间平板跨设备访问 | 双击 `start_silent.bat`，黑窗口 3 秒后自动消失，后台静默常驻；用浏览器输入网址/书签直接打开。关闭时运行 `stop.bat` |
+| **方式 1：桌面图标一键直达** | **日常最推荐**，连目录都不用进 | 首次双击运行 `make_shortcut.bat` 在桌面生成图标，后续在桌面直接双击秒开 |
+| **方式 2：文件夹双击启动** | 在工程文件夹内直接调试 | 双击 `start.bat`，优先直调自带绿色环境、启动网关并自动弹出默认浏览器 |
+| **方式 3：后台静默常驻** | 车间平板跨设备无线访问 | 双击 `start_silent.bat`（无黑框常驻后台），用局域网设备输入网址直接访问；关闭时双击 `stop.bat` |
 
 ---
 
-## 🌟 核心规范与“5合1”工业交付体系
+## 📦 统一工业 I/O 契约体系（“五合一”）
 
-```mermaid
-graph LR
-    subgraph WebApp ["Web 孪生前端 (网页渲染层)"]
-        Scene["3D Three.js / 2D Canvas 场景"]
-        HUD["实时状态 / 分拣计数 / 信号塔"]
-        Client["tia-twin-client.js (零依赖 SDK)"]
-        Scene <--> Client
-        HUD <--> Client
-    end
-
-    subgraph Gateway ["本地通信网关 (工业桥接层)"]
-        Bridge["tia_gateway.py (Snap7 WebSocket 网关)"]
-        Mock["离线物理 Mock 引擎"]
-        Bridge --- Mock
-    end
-
-    subgraph Siemens ["西门子控制层 (PLC)"]
-        PLCTarget["真实 S7-1200/1500/300 或 PLCSIM Advanced"]
-        DB["TwinIO.scl (非优化访问 DB 块)"]
-        Logic["TwinDemoLogic.scl / 用户控制程序"]
-        PLCTarget --- DB
-        DB --- Logic
-    end
-
-    Client -- "WebSocket JSON (tia-web-twin/1)" <--> Bridge
-    Bridge -- "S7comm (TCP 102 / Snap7)" <--> PLCTarget
-```
-
-1. **`twin.manifest.json`（统一信号契约）**：声明每个变量的 ID、PLC 绝对地址（如 `DB1.DBX0.0`、`DB1.DBB1`）、数据类型（Bool, Byte, Real, Int16）、读写权限（r/w/rw）与写模式（pulse 点动 / level 电平）。
-2. **`TwinIO.scl`（博途非优化 DB 源码）**：由 `generate_scl.py` 根据 manifest 自动生成，强制声明 `{ S7_Optimized_Access := 'FALSE' }`，在博途中一键生成 DB1。
-3. **`TwinDemoLogic.scl`（博途配套示例控制程序）**：与 DB 同步生成，内置启停自锁、光电感应推料延时、复位与计数逻辑。在博途 OB1 中插入一行 `"TwinDemoLogic"();` 即可立即让 3D 产线跑起来，彻底解决首次连上真实 PLC 时“因 PLC 内部无逻辑导致画面静止”的冷启动断层。
-4. **`tia-twin-client.js`（零依赖前端客户端）**：网页直接引入，内置断线重连、心跳保活、延迟显示（RTT）、信号监听（`client.on('tag:id', cb)`）与点动控制（`client.pulse('cmd.start')`）。
-5. **`tia_gateway.py`（通用桥接网关）**：基于 `python-snap7` 和 `websockets`，采用差量扫描引擎（仅在变量变动时广播 JSON），支持通过 `plc.configure` 运行时热切换目标 PLC。
+1. **`twin.manifest.json`（统一信号契约）**：跨平台唯一真相源，声明变量 ID、寻址地址（S7 DB 地址 / Modbus 寄存器 / TCP 偏移）、数据类型与读写权限；
+2. **`TwinIO.scl`（博途非优化 DB 源码）**：由脚手架根据 manifest 自动生成，声明 `{ S7_Optimized_Access := 'FALSE' }`，在 TIA Portal 中一键生成 DB1；
+3. **`TwinDemoLogic.scl`（配套闭环控制逻辑）**：与 DB 同步生成，内置启停自锁、PE1 光电触发推料、计数与复位。在博途 OB1 中插入一行 `"TwinDemoLogic"();` 即可 1 分钟完成活体闭环联调；
+4. **`tia-twin-client.js`（零依赖前端客户端）**：网页直接引入，内置心跳保活、RTT 延迟计算、离线 Mock 切换及 50ms/100ms 动态扫描节拍切换；
+5. **`tia_gateway.py`（多协议自适应网关）**：采用高效差量广播引擎，支持运行时热切换目标设备与协议。
 
 ---
 
-## 📂 目录结构
+## 📁 目录结构
 
 ```text
 siemens-s7-web-twin/
-├── SKILL.md                          # AI Agent Skill 核心规范、13 大红线与标准 SOP
-├── README.md                         # 项目总体说明与快速指南
+├── SKILL.md                          # AI Agent Skill 核心规范、18 大硬性红线与标准 SOP
+├── README.md                         # 项目核心说明与设计指南
 ├── scripts/
-│   ├── make_project.py              # 一键脚手架：自动装配 2D/3D 孪生工程与内置便携运行时
+│   ├── make_project.py              # 一键脚手架：自动装配工程、内置便携运行时与 models/ 目录
 │   ├── inspect_glb.py               # 零依赖 3D 资产 (Blender/CAD) 节点解析与 bindings 自动生成工具
-│   ├── tia_gateway.py               # WebSocket <-> S7comm (Snap7) / Mock 高性能网关 (支持 50ms/100ms 动态扫描)
+│   ├── tia_gateway.py               # 多协议通用高性能通信网关 (S7 / Modbus / Raw TCP / AI 扩展)
 │   ├── generate_scl.py              # 从 manifest 一键生成博途 DB 与控制逻辑 SCL 外部源文件
-│   ├── validate_manifest.py         # 信号清单校验脚本 (地址对齐、重叠与读写字节隔离检测)
+│   ├── validate_manifest.py         # 多协议信号清单语法校验与地址对齐检测
 │   ├── run_twin.py                  # 服务管理与浏览器自动唤起启动器
 │   ├── start.bat                    # Windows 极简启动器 (优先调用 ./runtime/ 绿色运行环境)
 │   ├── make_shortcut.bat            # 原生 PowerShell 桌面快捷方式生成器
-│   ├── start_silent.bat             # 后台静默启动器 (无黑窗口)
+│   ├── start_silent.bat             # 后台静默启动器 (PowerShell 无黑窗静默模式)
 │   ├── stop.bat                     # 后台服务一键终止脚本
-│   ├── start_twin.bat / .sh         # 兼容启动脚本 (Win/Linux)
-│   ├── start_twin.desktop           # Linux 桌面图标双击启动
+│   ├── start_twin.bat / .sh         # 跨平台兼容启动脚本 (Win / Linux)
+│   ├── start_twin.desktop           # Linux 桌面图标双击启动入口
 │   ├── build_exe.bat                # Windows PyInstaller 打包脚本
 │   ├── desktop_app.py               # 独立桌面端控制入口
-│   ├── tia_twin.spec                # PyInstaller 打包规格文件
-│   └── requirements.txt             # 运行依赖
+│   └── requirements.txt             # Python 依赖清单
 ├── assets/
 │   ├── runtime/
 │   │   ├── portable-runtime.zip     # 内置官方免安装极简 Python 3.11 运行时 (含 snap7/websockets)
-│   │   └── tia-twin-client.js       # 前端零依赖标准客户端库 (支持动态 poll.rate 扫描周期调度)
-│   ├── template/                    # 2D Canvas 经典产线模板工程
+│   │   └── tia-twin-client.js       # 前端零依赖标准客户端 SDK
+│   ├── template/                    # HTML 原生纯代码建模模板工程
+│   ├── three-demo/                  # Blender 工业建模 WebGL 模板工程
 │   │   ├── index.html / app.js / styles.css
-│   │   ├── twin.manifest.json
-│   │   └── gateway.config.json
-│   ├── three-demo/                  # 3D Three.js 现代化工业产线模板工程
-│   │   ├── index.html / app.js / styles.css (含 50ms/100ms 扫描周期切换器)
-│   │   └── vendor/                  # 本地离线 Three.js 核心库 (含零依赖 GLTFLoader.js 工业模型加载器)
+│   │   └── vendor/                  # 本地离线 Three.js 核心库 (含零依赖 GLTFLoader.js)
 │   └── tia/
 │       ├── TwinIO.scl               # 自动生成的博途非优化 DB1 外部源文件
-│       └── TwinDemoLogic.scl        # 自动生成的博途配套示例控制逻辑 (OB1 直接调用)
+│       └── TwinDemoLogic.scl        # 自动生成的博途配套控制逻辑
 └── references/
     ├── protocol-extension-guide.md  # 多工业协议 (Modbus TCP/RTU/RS-485/TCP-IP) 接入与 AI 自主开发扩展规范
     ├── blender-industrial-modeling.md # Blender 替代重型 CAD (NX/SolidWorks) 工业数字孪生全流程指南
     ├── cad-import-guide.md          # 工业 3D 资产 (CAD/Blender) 导入、节点命名契约与 PLC 信号绑定指南
-    ├── contract.md                  # tia-web-twin/1 WebSocket 通信协议规范 (含 poll.rate)
-    ├── deployment.md                # 部署与无环境/无终端方案说明 (含 Win11 24H2 避坑与绿色便携包)
+    ├── contract.md                  # tia-web-twin/1 WebSocket 通信协议规范
+    ├── deployment.md                # 部署说明 (含 Win11 24H2 避坑与绿色便携包说明)
     └── tia-setup-guide.md           # 实体真实 PLC 与 PLCSIM Advanced 关键配置手册
 ```
-
----
-
-## ⚙️ 接入真实 PLC / PLCSIM 硬件配置指南
-
-无论连接实体 PLC 还是仿真器，只需完成以下 3 步设置（详见 [references/tia-setup-guide.md](references/tia-setup-guide.md)）：
-
-### 1. 硬件/仿真器网络互通
-* **真实 PLC**：网线直连，将电脑网卡 IP 改为与 PLC 同一网段（例如 PLC 为 `192.168.0.10`，电脑设为 `192.168.0.100`），CMD 中 `ping` 测试通过。
-* **PLCSIM Advanced**：Online Access 必须选择 **`Siemens PLCSIM Virtual Ethernet Adapter`**（严禁选 Softbus），启动实例并分配 IP（如 `192.168.0.1`）。
-
-### 2. 博途 (TIA Portal) 关键属性与程序导入
-* **放行 PUT/GET 通信**：打开 CPU 设备组态 -> **属性** -> **防护与安全** -> **连接机制** -> 勾选 **“允许来自远程对象的 PUT/GET 通信访问”**（真实 PLC 必勾！）。
-* **导入数据块**：将工程生成的 `TwinIO.scl` 加入博途“外部源文件”，右键点击 **“从源生成块”**。确认生成的 DB 为非优化数据块（核对编号是否为 DB1）。
-* **导入示例控制程序（可选，1 分钟闭环测试）**：将 `TwinDemoLogic.scl` 同样加入外部源文件并生成 FC 块，在主循环组织块 **OB1 ("Main")** 中插入一行 `"TwinDemoLogic"();`。
-* **编译并下载**：全部编译并下载到 CPU，将 CPU 拨到 **RUN** 绿灯模式。
-
-### 3. 网页连接与扫描周期设置
-打开 3D 数字孪生页面：
-1. 点击右上角 **“连接 PLC”**；
-2. 选择目标机型（S7-1200/1500 默认 Rack 0 Slot 1，S7-300 默认 Rack 0 Slot 2）；
-3. 选择 **通信扫描周期**（高速物理孪生推荐 `50ms`，标准推荐 `100ms`）；
-4. 输入 PLC IP 点击连接即可实时双向闭环通讯。
 
 ---
 
 ## 🛡️ 工业通讯与 Windows 11 24H2 避坑要点
 
 1. **废弃 VBScript**：全面淘汰 `.vbs` 脚本，改用纯 7-bit ASCII `.bat` 与原生 PowerShell 实现无黑窗静默运行；
-2. **避免单文件 exe 临时目录拦截**：Win11 24H2 严格拦截第三方单文件向 `%TEMP%` 动态解压二进制（报 `Could not create temporary directory!`），日常使用推荐原生批处理与桌面快捷方式，或 `--onedir` 文件夹打包；
-3. **避免跨盘符虚拟环境 DLL 加载失败**：非系统盘创建 `.venv` 易触发 `_ctypes` DLL 初始化失效。启动脚本原生**优先加载自带 20MB 绿色便携环境（./runtime/）**，无便携包时无缝回退至物理机 Python，杜绝跨盘符 DLL 冲突；
-4. **严禁向物理输入区（%I）直写**：PLC 扫描周期起始阶段以微秒级硬件中断执行“过程映像输入 (PII)”刷新，强写 `%I` 会在微秒内被悬前端子置 0。虚拟传感器必须写入非优化数据块（`TwinIO` DB）供 PLC 逻辑读取；
-5. **读写字节严格隔离（Byte Isolation）**：S7comm 底层位写入为字节级“读-改-写 (Read-Modify-Write)”。严禁在同一字节内混排只读位（`r`）与写入位（`w`），防止上位机回写覆盖 PLC 刚更新的输出；
-6. **规避浏览器 ES 模块本地强缓存**：现代浏览器对本地 ES 模块具有激进缓存。项目 `run_twin.py` 服务端强制注入 `Cache-Control: no-cache, no-store, must-revalidate`，前端引用附加 `?v=...` 穿透参数，杜绝代码修改后浏览器读取旧缓存失效；
-7. **回转机构传感器消除旋转角偏置**：分度转台旋转时，工件角度发生动态位移。传感器判定必须消除转台旋转偏置（`((p.theta - m.table.angle) % 360 + 360) % 360`），杜绝顺控程序在分度工位陷入无限超时等待。
-
+2. **避免单文件 exe 临时目录拦截**：Win11 24H2 严格拦截单文件 exe 动态解压至 `%TEMP%`，日常推荐原生批处理与桌面快捷方式；
+3. **避免跨盘符虚拟环境冲突**：启动器原生**优先调用自带绿色环境 (`./runtime/`)**，免去配置 Path 与管理员权限的麻烦；
+4. **严禁向物理输入区 (%I) 直写**：PLC 扫描周期起始阶段以微秒级中断执行“过程映像输入 (PII)”刷新，强写 `%I` 会在微秒内被悬空端子置 0。虚拟传感器必须写入非优化数据块 (`TwinIO` DB) 或 Modbus 寄存器供 PLC 逻辑读取；
+5. **读写字节严格隔离 (Byte Isolation)**：底层位写入本质是字节级“读-改-写”。同一字节内严禁混排只读位 (`r`) 与写入位 (`w`)，防止上位机回写覆盖 PLC 刚更新的状态；
+6. **规避浏览器 ES 模块本地强缓存**：`run_twin.py` 服务端强制注入 `Cache-Control: no-cache, no-store`，前端引入附加时间戳，杜绝代码修改后浏览器读取旧缓存失效。
 
 ---
 
 ## 🤖 作为 AI Agent Skill 使用
 
 本工程遵循 Antigravity / Cursor / Claude Code / Qoder 的 Skill 规范，只需将此目录挂载至：
-* 全局配置：`~/.gemini/config/skills/siemens-s7-web-twin` 或 `~/.agents/skills/siemens-s7-web-twin`
+* 全局配置：`~/.gemini/config/skills/siemens-s7-web-twin` 或 `~/.agents/skills/`
 * 或工作区：`.agents/skills/siemens-s7-web-twin`
 
 AI 助手将自动理解机电拓扑契约，并在后台全自动完成 manifest 编写、SCL 生成与零命令脚手架搭建。
@@ -207,4 +241,4 @@ AI 助手将自动理解机电拓扑契约，并在后台全自动完成 manifes
 
 ## 📄 开源许可证
 
-本项目基于 [MIT License](LICENSE) 开源。
+本项目基于 [MIT License](LICENSE) 开源。欢迎工业自动化、数字孪生与物联网开发者共同维护！
