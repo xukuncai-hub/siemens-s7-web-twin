@@ -1,12 +1,26 @@
-# 工业 CAD (SolidWorks / Inventor) 模型导入与数字孪生绑定指南
+# 工业 3D 资产导入与数字孪生绑定指南 (CAD / Blender)
 
-在严肃的工业数字孪生项目中，真实产线往往在机械设计阶段就已经在 **SolidWorks、Autodesk Inventor、Siemens NX、Creo 或 Fusion 360** 中完成了 1:1 的三维装配体设计。
+在严肃的工业数字孪生项目中，真实产线模型通常来自以下两种途径：
+1. **途径 A（重型 CAD 途径）**：机械设计团队在 **Siemens NX、SolidWorks、Autodesk Inventor、Creo** 中完成了 1:1 的三维装配体，需导出为 STEP 后通过轻量化软件转换导入；
+2. **途径 B（Blender-First 途径 · 强烈推荐）**：直接使用 **Blender 替代重型 CAD** 完成工业轻量化建模。凭借原生 PBR 材质、零破面 glTF 导出、参数化草图插件（CAD Sketcher）与极低 Draw Call 控制，极大缩减工程联调周期。详见专用指南：[references/blender-industrial-modeling.md](blender-industrial-modeling.md)。
 
 为了保证工业级渲染质感、真实尺寸与零件精度，同时**彻底杜绝 AI 在网页端手写复杂几何体带来的空间算错、悬浮与穿模问题**，本项目原生支持工业标准 `.glb` / `.gltf` 模型的开箱即用导入与 PLC 信号自动驱动。
 
 ---
 
-## 1. 工业 CAD 导出推荐规范
+## 0. 快速自检工具：`scripts/inspect_glb.py`
+
+无论是从 Blender 导出还是从 CAD 转换得到的 `.glb` 文件，在配置之前均推荐运行自带的无依赖自检脚本：
+
+```bash
+python scripts/inspect_glb.py assets/models/my_line.glb
+```
+
+该工具会自动解析 glTF 节点树、校验尺度比例、筛选动件与传感器，并自动生成可直接复制到 `twin.manifest.json` 的 `bindings` 配置代码！
+
+---
+
+## 1. 工业 CAD / Blender 导出推荐规范
 
 ### 1.1 导出格式首选
 * **首选：单个二进制 `.glb`（Binary glTF）**

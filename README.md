@@ -29,9 +29,10 @@
   - **全线标高基准链统一**：推导工件承托面基准标高 $Y_0$（如统一为 $0.782\text{m}$），消除工站流转阶梯错位；
   - **运动包络与动力学校验**：转台外围构件避让回转包络线，滑槽按牛顿第二定律倾角自滑（$22^\circ$），末端配置缓冲止挡；
   - **120Hz 离线真物理**：告别插值假动画，采用 120Hz 离线刚体微步长求解、材质接触摩擦矩阵与 3D Raycast 光电传感器。
-* **工业 CAD (SolidWorks/GLTF) 导入契约优先（告别网页手写建模）**：
-  - **各司其职**：机械设计师在 SolidWorks / Inventor 中导出 1:1 工业装配体（`.glb`），视觉效果与尺寸精度 100% 工业级；
-  - **纯契约驱动**：AI 无需在网页手写脆弱几何代码，内置纯离线单文件 `GLTFLoader.js`，通过 `twin.manifest.json` 将节点名称（如推杆、皮带、信号灯）与 S7comm 变量自动挂接驱动。详见 [references/cad-import-guide.md](references/cad-import-guide.md)。
+* **工业 3D 资产契约优先（Blender 替代 NX/SolidWorks 工业轻量化建模 + CAD 契约导入）**：
+  - **Blender 替代重型 CAD**：告别重型 CAD (NX/SolidWorks) 繁琐的百万级面数与破面转换痛苦，全面支持以 Blender 为核心的工业轻量化建模流（公制尺寸、草图约束、PBR 真实材质、动静分离与 Origin 轴心归正）；
+  - **纯契约驱动与零依赖加载**：内置纯离线单文件 `GLTFLoader.js`，通过 `twin.manifest.json` 将节点名称（如推杆、皮带、信号灯、传感器 Empty）与 S7comm 变量自动挂接驱动；
+  - **一键自检工具**：配套纯 Python 零依赖 `scripts/inspect_glb.py`，秒级解析模型节点树、校验尺寸比例并自动输出可直接粘贴的 `bindings` 契约配置。详见 [references/blender-industrial-modeling.md](references/blender-industrial-modeling.md) 与 [references/cad-import-guide.md](references/cad-import-guide.md)。
 * **通信扫描周期自由可调 (50ms / 100ms)**：
   - **`50 ms (20 Hz · 高速响应)`**：机构物理孪生首选，气缸推拉、高速光电对射检测与碰撞几乎**零延迟**，动作丝滑顺畅。
   - **`100 ms (10 Hz · 工业标准)`**：经典工业 SCADA / HMI 推荐节拍，网络通信包少，CPU 占用极低，对通信处理机（CP）最温和。
@@ -114,6 +115,7 @@ siemens-s7-web-twin/
 ├── README.md                         # 项目总体说明与快速指南
 ├── scripts/
 │   ├── make_project.py              # 一键脚手架：自动装配 2D/3D 孪生工程与内置便携运行时
+│   ├── inspect_glb.py               # 零依赖 3D 资产 (Blender/CAD) 节点解析与 bindings 自动生成工具
 │   ├── tia_gateway.py               # WebSocket <-> S7comm (Snap7) / Mock 高性能网关 (支持 50ms/100ms 动态扫描)
 │   ├── generate_scl.py              # 从 manifest 一键生成博途 DB 与控制逻辑 SCL 外部源文件
 │   ├── validate_manifest.py         # 信号清单校验脚本 (地址对齐、重叠与读写字节隔离检测)
@@ -143,8 +145,9 @@ siemens-s7-web-twin/
 │       ├── TwinIO.scl               # 自动生成的博途非优化 DB1 外部源文件
 │       └── TwinDemoLogic.scl        # 自动生成的博途配套示例控制逻辑 (OB1 直接调用)
 └── references/
+    ├── blender-industrial-modeling.md # Blender 替代重型 CAD (NX/SolidWorks) 工业数字孪生全流程指南
+    ├── cad-import-guide.md          # 工业 3D 资产 (CAD/Blender) 导入、节点命名契约与 PLC 信号绑定指南
     ├── contract.md                  # tia-web-twin/1 WebSocket 通信协议规范 (含 poll.rate)
-    ├── cad-import-guide.md          # 工业 CAD (SolidWorks/GLTF) 模型导入与 PLC 信号绑定指南
     ├── deployment.md                # 部署与无环境/无终端方案说明 (含 Win11 24H2 避坑与绿色便携包)
     └── tia-setup-guide.md           # 实体真实 PLC 与 PLCSIM Advanced 关键配置手册
 ```

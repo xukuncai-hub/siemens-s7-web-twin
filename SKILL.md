@@ -1,6 +1,6 @@
 ---
 name: siemens-s7-web-twin
-description: 生成可直接连接西门子真实实体 S7 PLC (S7-1200 / S7-1500 / S7-300) 以及博途 PLCSIM Advanced 的网页产线数字孪生。用于制作 2D/3D 产线仿真、教学 HMI、虚拟调试页面，通过固定 twin.manifest.json 契约、浏览器 WebSocket SDK 和 Python snap7 网关，把网页传感器回写给实体 PLC / 仿真 PLC。触发词：数字孪生、产线仿真、真实PLC、实体PLC、S7-1200、S7-1500、PLCSIM Advanced、博途仿真、S7comm、虚拟调试、Three.js/Canvas 连 PLC。
+description: 生成可直接连接西门子真实实体 S7 PLC (S7-1200 / S7-1500 / S7-300) 以及博途 PLCSIM Advanced 的网页产线数字孪生。支持 Blender 工业级轻量化建模（全面替代 Siemens NX/SolidWorks）与 CAD glTF/GLB 模型契约导入。通过固定 twin.manifest.json 契约、浏览器 WebSocket SDK 和 Python snap7 网关，把网页传感器回写给实体 PLC / 仿真 PLC。触发词：数字孪生、产线仿真、真实PLC、实体PLC、S7-1200、S7-1500、PLCSIM Advanced、博途仿真、S7comm、虚拟调试、Three.js/Canvas 连 PLC、Blender、Blender工业建模、Blender替代CAD、Blender替代NX、Blender数字孪生、GLTF模型绑定、GLB导入。
 ---
 
 # Siemens S7 Web Twin (S7comm: 实体 PLC + PLCSIM)
@@ -142,12 +142,16 @@ AI 接收到用户需求时，必须第一时间识别并确定用户属于以�
       - 新手工程师导入 DB 连上真实 PLC 后，常困惑“为什么网页连上了但画面一动不动？”——根本原因在于其 PLC 内尚未编写梯形图控制逻辑，DB 输出全为 0。
       - `generate_scl.py` 在生成 `TwinIO.scl` 数据块的同时，自动配套生成一份 `TwinDemoLogic.scl` 示例控制功能块（含启停自锁、PE1 触发气缸推料、计数与复位）。用户只需在博途 OB1 中插入一行 `"TwinDemoLogic"();` 下载，即可在 1 分钟内完成首轮活体闭环联调！
 
-- **3D 呈现技术路径决策（外部 CAD 导入 vs 代码参数化工程推演）**：
-  - **路径 1（首选 · 工业高保真）：外部工业 CAD 模型 (SolidWorks / GLTF) 契约导入**：
-    - 若用户已有机械模型导出的 `.glb` / `.gltf` 文件，**严禁强行让 AI 在网页端手写粗糙几何体**；
-    - AI 直接将模型置于项目中，在 `twin.manifest.json` 中配置 `cadModel` 与 `bindings` 节点映射，利用内置的 `vendor/GLTFLoader.js` 完成自动驱动。详见 `references/cad-import-guide.md`。
-  - **路径 2（备选 · 简易逻辑实训）：有限资料下的机械结构合理化推导**：
-    - 若用户无现成 CAD 资料，AI 必须严格执行下述 **步骤 1.5**，自主推导全线标高基准链（如 $Y_0=0.782\text{m}$）、传力链生根（4040/4020型材）与斜槽动力学校验，杜绝悬浮零件与卡料。
+- **3D 呈现技术路径决策（Blender 工业建模 vs CAD 契约导入 vs 参数化代码推演）**：
+  - **路径 1（强烈推荐 · 现代化工业轻量化）：Blender 替代 CAD (NX/SolidWorks) 工业建模流**：
+    - 直接在 Blender 中完成机电产线建模或标准件装配（配合 `CAD Sketcher` 草图约束与公制单位）；
+    - 严格遵循动静分离（静态机架 `Ctrl+J` 合并降低 Draw Call）、Origin 对齐轴心点、Empty 激光探头挂载与 `+Y Up` 规范导出 `.glb`；
+    - 运行 `python scripts/inspect_glb.py assets/models/my_line.glb` 一键自检并自动生成 `twin.manifest.json` 中的 `bindings` 配置。详见 [references/blender-industrial-modeling.md](references/blender-industrial-modeling.md)。
+  - **路径 2（成熟产线对接 · 工业 CAD 契约导入）：外部 SolidWorks / NX / Inventor 模型**：
+    - 机械设计师已有 1:1 CAD 装配体，导出 STEP 经轻量化转为 `.glb` 导入；
+    - AI 将模型置于 `assets/models/`，在 `twin.manifest.json` 中配置 `cadModel` 与 `bindings` 节点映射，利用内置的 `vendor/GLTFLoader.js` 完成自动驱动。详见 [references/cad-import-guide.md](references/cad-import-guide.md)。
+  - **路径 3（备选 · 简易逻辑实训）：有限资料下的机械结构合理化推导**：
+    - 若用户无任何 3D 资产，AI 必须严格执行下述 **步骤 1.5**，自主推导全线标高基准链（如 $Y_0=0.782\text{m}$）、传力链生根（4040/4020型材）与斜槽动力学校验，杜绝悬浮零件与卡料。
 
 ### 步骤 1：产线机电对象与信号流向分析
 
@@ -499,6 +503,14 @@ python tia_gateway.py --config gateway.config.json --wait-plc
       - **机械设计师**：负责在 SolidWorks / Inventor / Blender 中设计 1:1 装配体并导出单个 `.glb` 文件（视觉效果 100% 工业级，含真实倒角、钣金折弯与五金螺栓）；
       - **AI 与上位机**：负责编写 `twin.manifest.json` 中的 `cadModel` 与 `bindings`，将模型中的动件节点（如 `Actuator_Pusher`、`Light_Green`、`Sensor_PE1`）与西门子 PLC 的 S7comm 变量自动挂接；
       - **内置离线驱动引擎**：工程模板已内置离线单文件 `vendor/GLTFLoader.js`，支持毫米/米自适应缩放、自动遍历节点树并实时驱动平移、旋转、贴图滚动与发光变色。详见 `references/cad-import-guide.md`。
+17. **Blender 替代传统重型 CAD (Siemens NX / SolidWorks) 的工业建模全套规范**：
+    - **为什么要替代**：传统 CAD 导出的 STEP/STL 模型动辄上百万面且丢失层次，网页极易破面卡顿；Blender 原生生成 glTF 2.0 (`.glb`)，面数低、质感高级且 100% 契合 Web 渲染。
+    - **核心建模铁律**：
+      1. **公制单位与尺寸约束**：场景单位设为公制（米或毫米），推荐配合 `CAD Sketcher` 插件使用参数化草图与尺寸约束建模；
+      2. **严格动静分离**：机架、底座、不动的零件全选按 `Ctrl + J` 合并为单网格（命名 `Static_Frame`），将 WebGL Draw Call 控制在 20 以内；气缸推头、转盘等动件必须保持独立 Object；
+      3. **轴心点 (Origin) 归正**：回转盘必须将 Origin 精准吸附至旋转轴心（利用 3D 游标）；气缸推头必须将 Origin 定位在收回原点；所有物体导出前必须按 `Ctrl + A` 选择“应用所有变换”；
+      4. **传感器挂载**：在光电传感器出光孔处创建 Empty（空物体），命名如 `Sensor_PE1`，作为射线检测挂载点；
+      5. **规范导出与自检**：导出单一 `.glb`（勾选 `+Y 向上`、应用修改器），运行 `python scripts/inspect_glb.py` 自动分析节点并生成 bindings 代码。详见 [references/blender-industrial-modeling.md](references/blender-industrial-modeling.md)。
 
 ## 9. AI Agent 交付规范与最终回复模板 (Agent Delivery Response Standard)
 
@@ -558,10 +570,12 @@ python tia_gateway.py --config gateway.config.json --wait-plc
 
 ## 12. 资源
 
+- `references/blender-industrial-modeling.md`：Blender 替代 NX/SolidWorks 工业建模实战、草图约束、六大铁律与 GLB 导出指南。
+- `references/cad-import-guide.md`：工业 3D 资产 (CAD / Blender) 模型导出、节点命名契约与 PLC 信号绑定指南。
 - `references/contract.md`：manifest 与 WebSocket 协议完整定义。
 - `references/tia-setup-guide.md`：PLCSIM Advanced / TIA / DB / 排错。
 - `references/deployment.md`：双击启动、Windows 单文件 exe、Windows 服务三种部署方式。
-- `references/cad-import-guide.md`：工业 CAD (SolidWorks/Inventor) 模型导出、节点命名契约与 PLC 信号绑定指南。
+- `scripts/inspect_glb.py`：零依赖纯 Python 3D 模型节点树与契约自检工具，一键生成 bindings 配置。
 - `assets/template/`：2D 操作台示例（离线数据编辑 + PLC 连接）。
 - `assets/three-demo/`：3D 产线示例，使用同一 manifest/SDK/网关。
 - `assets/three-demo/vendor/GLTFLoader.js`：零依赖纯离线工业 GLTF/GLB 模型加载器。
