@@ -34,18 +34,42 @@ ACCESS = {"r", "w", "rw"}
 WRITE_MODES = {"level", "pulse"}
 
 
-def parse_address(addr: str):
-    m = ADDR_RE.match(addr or "")
-    if not m:
-        raise ValueError("地址格式应为 DBn.DBX/DBB/DBW/DBD<offset>[.bit]")
-    kind = m.group("kind")
-    byte = int(m.group("byte"))
-    bit = int(m.group("bit")) if m.group("bit") is not None else None
-    if kind == "DBX" and bit is None:
-        raise ValueError("布尔量地址必须带位号，如 DB1.DBX0.0")
-    if kind != "DBX" and bit is not None:
-        raise ValueError("DBB/DBW/DBD 地址不能带位号")
-    return int(m.group("db")), kind, byte, bit
+MODBUS_ADDR_RE = re.compile(
+    r"^(?:(?P<slave>\d+)#)?(?:(?P<prefix>0x|1x|3x|4x)(?P<reg1>\d+)|(?P<area>coil|di|ir|hr):(?P<reg2>\d+)(?:\.(?P<bit>[0-7]))?|(?P<num>\d{5}))$",
+    re.IGNORECASE
+)
+RAW_ADDR_RE = re.compile(r"^(?:offset|byte):(?P<byte>\d+)(?:\.(?P<bit>[0-7]))?$", re.IGNORECASE)
+
+
+def parse_address(addr: str, protocol: str = "s7"):
+    protocol = protocol.lower()
+    if protocol in ("s7", "s7comm", "siemens"):
+        m = ADDR_RE.match(addr or "")
+        if not m:
+            raise ValueError("S7 地址格式应为 DBn.DBX/DBB/DBW/DBD<offset>[.bit]")
+        kind = m.group("kind")
+        byte = int(m.group("byte"))
+        bit = int(m.group("bit")) if m.group("bit") is not None else None
+        if kind == "DBX" and bit is None:
+            raise ValueError("布尔量地址必须带位号，如 DB1.DBX0.0")
+        if kind != "DBX" and bit is not None:
+            raise ValueError("DBB/DBW/DBD 地址不能带位号")
+        return int(m.group("db")), kind, byte, bit
+    elif protocol in ("modbus-tcp", "modbus-rtu", "modbus", "modbus_tcp", "modbus_rtu", "rs485"):
+        m = MODBUS_ADDR_RE.match(addr or "")
+        if not m:
+            raise ValueError("Modbus 地址格式应为 0x0001 / 1x0001 / 3x0001 / 4x0001 或 coil:1 / hr:1 或 5位寄存器号")
+        return 0, "MODBUS", 0, None
+    elif protocol in ("tcp-raw", "raw-tcp", "socket"):
+        m = RAW_ADDR_RE.match(addr or "")
+        if not m:
+            raise ValueError("Raw TCP 地址格式应为 offset:0 / byte:0[.bit]")
+        return 0, "RAW", int(m.group("byte")), None
+    else:
+        # 自定义协议，只要有地址即可
+        if not addr:
+            raise ValueError("缺少地址")
+        return 0, "CUSTOM", 0, None
 
 
 def check_mock_init(tag, errors):
@@ -87,18 +111,28 @@ def validate(path: Path):
     if not isinstance(plc, dict):
         errors.append("plc 必须是对象")
         plc = {}
-    ip = plc.get("ip")
-    if not isinstance(ip, str) or not re.match(r"^\d{1,3}(?:\.\d{1,3}){3}$", ip or ""):
-        errors.append("plc.ip 必须是 IPv4 地址")
-    rack = plc.get("rack")
-    slot = plc.get("slot")
-    if not isinstance(rack, int) or not 0 <= rack <= 7:
-        errors.append("plc.rack 必须是 0..7 的整数")
-    if not isinstance(slot, int) or not 0 <= slot <= 31:
-        errors.append("plc.slot 必须是 0..31 的整数")
-    dbno = plc.get("db")
-    if dbno is not None and (not isinstance(dbno, int) or dbno <= 0):
-        errors.append("plc.db 若指定必须是大于 0 的整数")
+    protocol = str(data.get("protocol") or plc.get("protocol", "s7")).lower()
+    if protocol in ("s7", "s7comm", "siemens"):
+        ip = plc.get("ip")
+        if not isinstance(ip, str) or not re.match(r"^\d{1,3}(?:\.\d{1,3}){3}$", ip or ""):
+            errors.append("plc.ip 必须是 IPv4 地址")
+        rack = plc.get("rack")
+        slot = plc.get("slot")
+        if not isinstance(rack, int) or not 0 <= rack <= 7:
+            errors.append("plc.rack 必须是 0..7 的整数")
+        if not isinstance(slot, int) or not 0 <= slot <= 31:
+            errors.append("plc.slot 必须是 0..31 的整数")
+        dbno = plc.get("db")
+        if dbno is not None and (not isinstance(dbno, int) or dbno <= 0):
+            errors.append("plc.db 若指定必须是大于 0 的整数")
+    elif protocol in ("modbus-tcp", "tcp-raw", "raw-tcp", "socket"):
+        ip = plc.get("ip")
+        if not isinstance(ip, str):
+            errors.append("plc.ip 必须是有效 IP 或主机名")
+    elif protocol in ("modbus-rtu", "rs485"):
+        port = plc.get("port")
+        if not isinstance(port, str):
+            errors.append("plc.port 必须指定串口设备，如 COM3 或 /dev/ttyUSB0")
     poll = plc.get("defaultPollHz", 10)
     if not isinstance(poll, int) or not 1 <= poll <= 30:
         errors.append("plc.defaultPollHz 必须在 1..30")
@@ -149,24 +183,25 @@ def validate(path: Path):
             errors.append(f"{label}: address 重复 ({addr})")
         addrs.add(addr)
         try:
-            tdb, kind, byte, bit = parse_address(addr)
+            tdb, kind, byte, bit = parse_address(addr, protocol)
         except ValueError as exc:
             errors.append(f"{label}: {exc}")
             continue
-        if not (1 <= tdb <= 65535):
-            errors.append(f"{label}: DB 号必须在 1..65535 之间，发现 DB{tdb}")
-        if kind != KIND_FOR_TYPE[typ]:
-            errors.append(f"{label}: {typ} 应使用 {KIND_FOR_TYPE[typ]}，地址是 {kind}")
-        if kind in ("DBW", "DBD") and byte % 2:
-            errors.append(f"{label}: {kind} 偏移 {byte} 不是 2 字节对齐")
-        if kind == "DBD" and byte % 4:
-            errors.append(f"{label}: DBD 偏移 {byte} 不是 4 字节对齐")
-        size = SIZE_FOR_TYPE[typ]
-        byte_access_by_db.setdefault(tdb, {}).setdefault(byte, []).append((label, access))
-        if kind == "DBX":
-            bool_bytes_by_db.setdefault(tdb, []).append(byte)
-        else:
-            intervals_by_db.setdefault(tdb, []).append((byte, byte + size, label))
+        if protocol in ("s7", "s7comm", "siemens"):
+            if not (1 <= tdb <= 65535):
+                errors.append(f"{label}: DB 号必须在 1..65535 之间，发现 DB{tdb}")
+            if kind != KIND_FOR_TYPE[typ]:
+                errors.append(f"{label}: {typ} 应使用 {KIND_FOR_TYPE[typ]}，地址是 {kind}")
+            if kind in ("DBW", "DBD") and byte % 2:
+                errors.append(f"{label}: {kind} 偏移 {byte} 不是 2 字节对齐")
+            if kind == "DBD" and byte % 4:
+                errors.append(f"{label}: DBD 偏移 {byte} 不是 4 字节对齐")
+            size = SIZE_FOR_TYPE[typ]
+            byte_access_by_db.setdefault(tdb, {}).setdefault(byte, []).append((label, access))
+            if kind == "DBX":
+                bool_bytes_by_db.setdefault(tdb, []).append(byte)
+            else:
+                intervals_by_db.setdefault(tdb, []).append((byte, byte + size, label))
         check_mock_init(tag, errors)
         parsed.append((tid or label, addr, typ, access, mode, tag.get("desc", "")))
     if readable == 0:

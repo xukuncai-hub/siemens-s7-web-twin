@@ -1,6 +1,6 @@
 ---
 name: siemens-s7-web-twin
-description: 生成可直接连接西门子真实实体 S7 PLC (S7-1200 / S7-1500 / S7-300) 以及博途 PLCSIM Advanced 的网页产线数字孪生。支持 Blender 工业级轻量化建模（全面替代 Siemens NX/SolidWorks）与 CAD glTF/GLB 模型契约导入。通过固定 twin.manifest.json 契约、浏览器 WebSocket SDK 和 Python snap7 网关，把网页传感器回写给实体 PLC / 仿真 PLC。触发词：数字孪生、产线仿真、真实PLC、实体PLC、S7-1200、S7-1500、PLCSIM Advanced、博途仿真、S7comm、虚拟调试、Three.js/Canvas 连 PLC、Blender、Blender工业建模、Blender替代CAD、Blender替代NX、Blender数字孪生、GLTF模型绑定、GLB导入。
+description: 生成可直接连接工业硬件与仿真器的网页产线数字孪生。原生多协议支持（西门子 S7-1200/1500/300 S7comm、Modbus TCP、Modbus RTU RS-485、Raw TCP/IP Socket）及 AI 自主扩展新协议驱动（三菱MC/欧姆龙FINS/MQTT）。支持 HTML 原生建模与 Blender 工业级轻量化建模（全面替代 Siemens NX/SolidWorks）。通过固定 twin.manifest.json 契约、浏览器 WebSocket SDK 和统一网关，把网页传感器回写给真实下位机。触发词：数字孪生、产线仿真、真实PLC、实体PLC、S7-1200、S7-1500、PLCSIM Advanced、博途仿真、S7comm、虚拟调试、Modbus、Modbus-TCP、Modbus-RTU、RS485、TCPIP、三菱MC、欧姆龙FINS、多工业协议、Blender、Blender工业建模、Blender替代CAD、Blender替代NX、Blender数字孪生、GLTF模型绑定、GLB导入。
 ---
 
 # Siemens S7 Web Twin (S7comm: 实体 PLC + PLCSIM)
@@ -517,6 +517,18 @@ python tia_gateway.py --config gateway.config.json --wait-plc
       3. **轴心点 (Origin) 归正**：回转盘必须将 Origin 精准吸附至旋转轴心（利用 3D 游标）；气缸推头必须将 Origin 定位在收回原点；所有物体导出前必须按 `Ctrl + A` 选择“应用所有变换”；
       4. **传感器挂载**：在光电传感器出光孔处创建 Empty（空物体），命名如 `Sensor_PE1`，作为射线检测挂载点；
       5. **规范导出与自检**：导出单一 `.glb`（勾选 `+Y 向上`、应用修改器），运行 `python scripts/inspect_glb.py` 自动分析节点并生成 bindings 代码。详见 [references/blender-industrial-modeling.md](references/blender-industrial-modeling.md)。
+18. **多工业通信协议原生支持与 AI 依规自主开发扩展铁律 (Multi-Protocol SOP)**：
+    - **核心认知**：前端 Web 数字孪生（Three.js / HTML 原生动画）与底层硬件协议**完全解耦**。网页只认 WebSocket JSON（`tia-web-twin/1`），下位机更换通信协议时，前端页面与 3D 逻辑 100% 无需修改！
+    - **严禁拒绝非西门子协议**：当用户提出使用除西门子 S7 之外的工业通信协议（如 **Modbus TCP、Modbus RTU / RS-485、Raw TCP/IP Socket、三菱 MC 协议、欧姆龙 FINS、MQTT、私有帧格式** 等）时，**AI 严禁回答“本工具只支持西门子”**！
+    - **两大应对场景执行规程**：
+      1. **原生内置协议（Modbus TCP / Modbus RTU / Raw TCP）**：
+         - 网关已原生内置上述三大驱动，零外部额外库依赖；
+         - 在 `twin.manifest.json` 中配置 `"protocol": "modbus-tcp"` 或 `"modbus-rtu"` / `"tcp-raw"`，按规范填写寄存器/位地址（如 `0x0001`、`4x0001`、`offset:0`）即可秒级运行。
+      2. **专有/新协议自主开发（AI 10分钟依规实现）**：
+         - 当遇到未内置的新协议时，**AI Agent 必须严格按照 [`references/protocol-extension-guide.md`](references/protocol-extension-guide.md) 的标准驱动基类规范**；
+         - 继承 `BaseProtocolBackend` 实现 `ensure_connected`、`read_all`、`write`、`status` 四大方法；
+         - 在 `create_backend` 工厂函数中注册该协议，或存为 `custom_driver.py`。
+         - 全程保持统一网关差量广播与 Web 端平滑驱动。
 
 ## 9. AI Agent 交付规范与最终回复模板 (Agent Delivery Response Standard)
 
@@ -576,6 +588,7 @@ python tia_gateway.py --config gateway.config.json --wait-plc
 
 ## 12. 资源
 
+- `references/protocol-extension-guide.md`：多工业通信协议 (Modbus TCP/RTU/RS485/TCP-IP) 接入与 AI 自主开发扩展规范指南。
 - `references/blender-industrial-modeling.md`：Blender 替代 NX/SolidWorks 工业建模实战、草图约束、六大铁律与 GLB 导出指南。
 - `references/cad-import-guide.md`：工业 3D 资产 (CAD / Blender) 模型导出、节点命名契约与 PLC 信号绑定指南。
 - `references/contract.md`：manifest 与 WebSocket 协议完整定义。

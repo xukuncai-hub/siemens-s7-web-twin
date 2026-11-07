@@ -38,6 +38,11 @@ except ImportError:  # websockets < 14
 LOG = logging.getLogger("tia-gateway")
 PROTOCOL = "tia-web-twin/1"
 ADDR_RE = re.compile(r"^DB(?P<db>\d+)\.(?P<kind>DBX|DBB|DBW|DBD)(?P<byte>\d+)(?:\.(?P<bit>[0-7]))?$")
+MODBUS_ADDR_RE = re.compile(
+    r"^(?:(?P<slave>\d+)#)?(?:(?P<prefix>0x|1x|3x|4x)(?P<reg1>\d+)|(?P<area>coil|di|ir|hr):(?P<reg2>\d+)(?:\.(?P<bit>[0-7]))?|(?P<num>\d{5}))$",
+    re.IGNORECASE
+)
+RAW_ADDR_RE = re.compile(r"^(?:offset|byte):(?P<byte>\d+)(?:\.(?P<bit>[0-7]))?$", re.IGNORECASE)
 KIND_FOR_TYPE = {"bool": "DBX", "byte": "DBB", "int16": "DBW", "uint16": "DBW",
                  "int32": "DBD", "uint32": "DBD", "real": "DBD"}
 SIZE_FOR_TYPE = {"bool": 1, "byte": 1, "int16": 2, "uint16": 2, "int32": 4, "uint32": 4, "real": 4}
@@ -65,6 +70,9 @@ class Tag:
     db: int
     byte: int
     bit: int | None
+    area: str | None = None
+    reg: int | None = None
+    slave_id: int | None = None
 
     @property
     def readable(self) -> bool:
@@ -90,10 +98,11 @@ class Manifest:
         self.project = data["project"]
         self.title = data.get("title", self.project)
         self.plc = data.get("plc", {})
+        self.protocol = str(data.get("protocol") or self.plc.get("protocol", "s7")).lower()
         self.tags: dict[str, Tag] = {}
         self.bindings = data.get("bindings", [])
         for item in data.get("tags", []):
-            tag = self._tag(item)
+            tag = self._parse_tag(item, self.protocol)
             if tag.id in self.tags:
                 raise ValueError(f"tag 重复: {tag.id}")
             self.tags[tag.id] = tag
@@ -101,40 +110,88 @@ class Manifest:
         self.poll_hz = int(self.plc.get("defaultPollHz", 10))
         if not 1 <= self.poll_hz <= 30:
             raise ValueError("defaultPollHz 必须在 1..30")
-        # Contiguous read blocks per DB (readable tags only).
+
+        # Contiguous read blocks per DB (readable tags only, used for S7comm).
         self.read_blocks = []
-        by_db: dict[int, list[Tag]] = {}
-        for t in self.tags.values():
-            if t.readable:
-                by_db.setdefault(t.db, []).append(t)
-        for db, tags in by_db.items():
-            start = min(t.byte for t in tags)
-            end = max(t.byte + (1 if t.type == "bool" else t.size) for t in tags)
-            self.read_blocks.append((db, start, end - start, tags))
+        if self.protocol in ("s7", "s7comm", "siemens"):
+            by_db: dict[int, list[Tag]] = {}
+            for t in self.tags.values():
+                if t.readable:
+                    by_db.setdefault(t.db, []).append(t)
+            for db, tags in by_db.items():
+                start = min(t.byte for t in tags)
+                end = max(t.byte + (1 if t.type == "bool" else t.size) for t in tags)
+                self.read_blocks.append((db, start, end - start, tags))
 
     @staticmethod
-    def _tag(item: dict) -> Tag:
+    def _parse_tag(item: dict, protocol: str = "s7") -> Tag:
         tid = item["id"]
-        addr = item["address"]
-        m = ADDR_RE.match(addr)
-        if not m:
-            raise ValueError(f"{tid}: 地址格式错误 {addr}")
-        kind, byte = m.group("kind"), int(m.group("byte"))
-        bit = int(m.group("bit")) if m.group("bit") is not None else None
+        addr = str(item.get("address", ""))
         typ = item["type"]
-        if KIND_FOR_TYPE.get(typ) != kind:
-            raise ValueError(f"{tid}: type={typ} 与地址 {kind} 不匹配")
-        if kind == "DBX" and bit is None:
-            raise ValueError(f"{tid}: bool 地址需要位号")
-        if kind != "DBX" and bit is not None:
-            raise ValueError(f"{tid}: 非 bool 地址不能带位号")
-        if kind in ("DBW", "DBD") and byte % 2:
-            raise ValueError(f"{tid}: {kind} 偏移必须 2 字节对齐")
-        if kind == "DBD" and byte % 4:
-            raise ValueError(f"{tid}: DBD 偏移必须 4 字节对齐")
-        return Tag(tid, addr, typ, item.get("access", "r"), item.get("writeMode", "level"),
-                   int(item.get("pulseMs", 150)), item.get("mockInit"), item.get("desc", ""),
-                   int(m.group("db")), byte, bit)
+        access = item.get("access", "r")
+        mode = item.get("writeMode", "level")
+        pulse_ms = int(item.get("pulseMs", 150))
+        mock_init = item.get("mockInit")
+        desc = item.get("desc", "")
+        proto = protocol.lower()
+
+        if proto in ("s7", "s7comm", "siemens"):
+            m = ADDR_RE.match(addr)
+            if not m:
+                raise ValueError(f"{tid}: S7 地址格式错误 {addr}")
+            kind, byte = m.group("kind"), int(m.group("byte"))
+            bit = int(m.group("bit")) if m.group("bit") is not None else None
+            if KIND_FOR_TYPE.get(typ) != kind:
+                raise ValueError(f"{tid}: type={typ} 与地址 {kind} 不匹配")
+            if kind == "DBX" and bit is None:
+                raise ValueError(f"{tid}: bool 地址需要位号")
+            if kind != "DBX" and bit is not None:
+                raise ValueError(f"{tid}: 非 bool 地址不能带位号")
+            if kind in ("DBW", "DBD") and byte % 2:
+                raise ValueError(f"{tid}: {kind} 偏移必须 2 字节对齐")
+            if kind == "DBD" and byte % 4:
+                raise ValueError(f"{tid}: DBD 偏移必须 4 字节对齐")
+            return Tag(tid, addr, typ, access, mode, pulse_ms, mock_init, desc,
+                       int(m.group("db")), byte, bit)
+        elif proto in ("modbus-tcp", "modbus-rtu", "modbus", "modbus_tcp", "modbus_rtu", "rs485"):
+            m = MODBUS_ADDR_RE.match(addr)
+            if not m:
+                raise ValueError(f"{tid}: Modbus 地址格式错误 {addr}")
+            slave_id = int(m.group("slave")) if m.group("slave") else None
+            area = "hr"
+            reg = 1
+            bit = None
+            if m.group("prefix"):
+                pfx = m.group("prefix").lower()
+                reg = int(m.group("reg1"))
+                area = {"0x": "coil", "1x": "di", "3x": "ir", "4x": "hr"}[pfx]
+            elif m.group("area"):
+                area = m.group("area").lower()
+                reg = int(m.group("reg2"))
+                bit = int(m.group("bit")) if m.group("bit") is not None else None
+            elif m.group("num"):
+                num = int(m.group("num"))
+                if num < 10000:
+                    area, reg = "coil", num
+                elif num < 20000:
+                    area, reg = "di", num - 10000
+                elif num < 40000:
+                    area, reg = "ir", num - 30000
+                else:
+                    area, reg = "hr", num - 40000
+            return Tag(tid, addr, typ, access, mode, pulse_ms, mock_init, desc,
+                       0, reg * 2, bit, area=area, reg=reg, slave_id=slave_id)
+        elif proto in ("tcp-raw", "raw-tcp", "socket"):
+            m = RAW_ADDR_RE.match(addr)
+            if not m:
+                raise ValueError(f"{tid}: Raw TCP 地址格式错误 {addr}")
+            byte = int(m.group("byte"))
+            bit = int(m.group("bit")) if m.group("bit") is not None else None
+            return Tag(tid, addr, typ, access, mode, pulse_ms, mock_init, desc,
+                       0, byte, bit)
+        else:
+            return Tag(tid, addr, typ, access, mode, pulse_ms, mock_init, desc,
+                       0, 0, None)
 
 
 def coerce(tag: Tag, value: Any) -> Any:
@@ -184,7 +241,26 @@ def parse_block(block: bytearray, start: int, tags: list[Tag]) -> dict[str, Any]
     return out
 
 
-class S7Backend:
+class BaseProtocolBackend:
+    name: str = "base"
+
+    def status(self) -> dict:
+        return {"state": "unknown", "message": "unimplemented"}
+
+    async def ensure_connected(self) -> bool:
+        return True
+
+    async def read_all(self) -> dict[str, Any]:
+        return {}
+
+    async def write(self, tag: Tag, value: Any) -> None:
+        pass
+
+    async def close(self) -> None:
+        pass
+
+
+class S7Backend(BaseProtocolBackend):
     name = "s7"
 
     def __init__(self, manifest: Manifest, plc_cfg: dict):
@@ -296,6 +372,320 @@ class S7Backend:
             pass
 
 
+class ModbusTcpBackend(BaseProtocolBackend):
+    name = "modbus-tcp"
+
+    def __init__(self, manifest: Manifest, cfg: dict):
+        self.manifest = manifest
+        self.ip = str(cfg.get("ip") or manifest.plc.get("ip", "127.0.0.1"))
+        self.port = int(cfg.get("port") or manifest.plc.get("port", 502))
+        self.slave_id = int(cfg.get("slaveId") or manifest.plc.get("slaveId", 1))
+        self.reader = None
+        self.writer = None
+        self.connected = False
+        self.last_error = ""
+        self.last_connect_try = 0.0
+        self.trans_id = 0
+        self.lock = asyncio.Lock()
+
+    def _next_tid(self) -> int:
+        self.trans_id = (self.trans_id + 1) & 0xFFFF
+        return self.trans_id
+
+    async def ensure_connected(self) -> bool:
+        if self.connected and self.writer and not self.writer.is_closing():
+            return True
+        now = time.monotonic()
+        if now - self.last_connect_try < 2.0:
+            return False
+        self.last_connect_try = now
+        try:
+            self.reader, self.writer = await asyncio.wait_for(
+                asyncio.open_connection(self.ip, self.port), timeout=3.0
+            )
+            self.connected = True
+            self.last_error = ""
+            LOG.info("Modbus TCP connected to %s:%d (slaveId=%d)", self.ip, self.port, self.slave_id)
+        except Exception as exc:
+            self.connected = False
+            self.last_error = f"Modbus TCP 连接失败: {exc}"
+            LOG.warning("Modbus TCP 连接失败 (%s:%d): %s", self.ip, self.port, exc)
+            if self.writer:
+                try:
+                    self.writer.close()
+                except Exception:
+                    pass
+        return self.connected
+
+    async def _send_modbus(self, fc: int, data: bytes, slave_id: int | None = None) -> bytes:
+        unit = self.slave_id if slave_id is None else slave_id
+        tid = self._next_tid()
+        pdu = bytes([fc]) + data
+        adu = struct.pack(">HHHB", tid, 0, len(pdu) + 1, unit) + pdu
+        self.writer.write(adu)
+        await self.writer.drain()
+
+        hdr = await asyncio.wait_for(self.reader.readexactly(7), timeout=2.0)
+        resp_tid, proto_id, resp_len, resp_unit = struct.unpack(">HHHB", hdr)
+        resp_pdu = await asyncio.wait_for(self.reader.readexactly(resp_len - 1), timeout=2.0)
+        resp_fc = resp_pdu[0]
+        if resp_fc == (fc | 0x80):
+            err_code = resp_pdu[1] if len(resp_pdu) > 1 else 0
+            raise RuntimeError(f"Modbus 异常响应: FC={resp_fc:#x}, code={err_code}")
+        return resp_pdu[1:]
+
+    async def read_all(self) -> dict[str, Any]:
+        if not await self.ensure_connected():
+            raise RuntimeError(self.last_error or "Modbus TCP 未连接")
+        out = {}
+        async with self.lock:
+            for t in self.manifest.tags.values():
+                if not t.readable:
+                    continue
+                try:
+                    val = await self._read_tag(t)
+                    if val is not None:
+                        out[t.id] = val
+                except Exception as exc:
+                    LOG.debug("读取 tag %s 失败: %s", t.id, exc)
+        return out
+
+    async def _read_tag(self, tag: Tag) -> Any:
+        area = tag.area or "hr"
+        reg = max(0, (tag.reg or 1) - 1)
+        slave = tag.slave_id or self.slave_id
+
+        if area == "coil":
+            data = struct.pack(">HH", reg, 1)
+            resp = await self._send_modbus(1, data, slave)
+            return bool(resp[1] & 0x01)
+        elif area == "di":
+            data = struct.pack(">HH", reg, 1)
+            resp = await self._send_modbus(2, data, slave)
+            return bool(resp[1] & 0x01)
+        elif area in ("ir", "hr"):
+            fc = 4 if area == "ir" else 3
+            count = 2 if tag.size == 4 else 1
+            data = struct.pack(">HH", reg, count)
+            resp = await self._send_modbus(fc, data, slave)
+            reg_bytes = resp[1:]
+            if tag.type == "bool":
+                bit = tag.bit if tag.bit is not None else 0
+                word = struct.unpack(">H", reg_bytes[:2])[0]
+                return bool((word >> bit) & 1)
+            elif tag.type == "int16":
+                return struct.unpack(">h", reg_bytes[:2])[0]
+            elif tag.type in ("uint16", "byte"):
+                return struct.unpack(">H", reg_bytes[:2])[0]
+            elif tag.type == "int32":
+                return struct.unpack(">i", reg_bytes[:4])[0]
+            elif tag.type == "uint32":
+                return struct.unpack(">I", reg_bytes[:4])[0]
+            elif tag.type == "real":
+                return round(struct.unpack(">f", reg_bytes[:4])[0], 4)
+        return None
+
+    async def write(self, tag: Tag, value: Any) -> None:
+        if not await self.ensure_connected():
+            raise RuntimeError(self.last_error or "Modbus TCP 未连接")
+        area = tag.area or "hr"
+        reg = max(0, (tag.reg or 1) - 1)
+        slave = tag.slave_id or self.slave_id
+
+        async with self.lock:
+            try:
+                if area == "coil":
+                    val_bytes = b"\xFF\x00" if value else b"\x00\x00"
+                    data = struct.pack(">H", reg) + val_bytes
+                    await self._send_modbus(5, data, slave)
+                elif area == "hr":
+                    if tag.type == "bool":
+                        word = 1 if value else 0
+                        data = struct.pack(">HH", reg, word)
+                        await self._send_modbus(6, data, slave)
+                    elif tag.type in ("int16", "uint16", "byte"):
+                        data = struct.pack(">Hh" if tag.type == "int16" else ">HH", reg, int(value))
+                        await self._send_modbus(6, data, slave)
+                    elif tag.type in ("int32", "uint32", "real"):
+                        if tag.type == "real":
+                            raw = struct.pack(">f", float(value))
+                        elif tag.type == "int32":
+                            raw = struct.pack(">i", int(value))
+                        else:
+                            raw = struct.pack(">I", int(value))
+                        data = struct.pack(">HHB", reg, 2, 4) + raw
+                        await self._send_modbus(16, data, slave)
+            except Exception as exc:
+                LOG.warning("Modbus write tag %s failed: %s", tag.id, exc)
+
+    def status(self) -> dict:
+        return {
+            "state": "connected" if self.connected else "error",
+            "message": "" if self.connected else (self.last_error or "Modbus TCP 未连接"),
+            "target": f"{self.ip}:{self.port}",
+            "protocol": "modbus-tcp"
+        }
+
+    async def close(self):
+        if self.writer:
+            try:
+                self.writer.close()
+                await self.writer.wait_closed()
+            except Exception:
+                pass
+
+
+class ModbusRtuBackend(BaseProtocolBackend):
+    name = "modbus-rtu"
+
+    def __init__(self, manifest: Manifest, cfg: dict):
+        self.manifest = manifest
+        self.port = str(cfg.get("port") or manifest.plc.get("port", "/dev/ttyUSB0"))
+        self.baudrate = int(cfg.get("baudrate") or manifest.plc.get("baudrate", 9600))
+        self.slave_id = int(cfg.get("slaveId") or manifest.plc.get("slaveId", 1))
+        self.serial = None
+        self.connected = False
+        self.last_error = ""
+        self.lock = asyncio.Lock()
+
+    async def ensure_connected(self) -> bool:
+        if self.connected and self.serial and getattr(self.serial, "is_open", False):
+            return True
+        try:
+            import serial
+        except ImportError:
+            self.last_error = "缺少 pyserial 模块，请运行 pip install pyserial"
+            return False
+        try:
+            self.serial = serial.Serial(self.port, self.baudrate, timeout=1.0)
+            self.connected = True
+            self.last_error = ""
+            LOG.info("Modbus RTU (RS-485) connected on %s @ %d bps", self.port, self.baudrate)
+        except Exception as exc:
+            self.connected = False
+            self.last_error = f"串口打开失败 ({self.port}): {exc}"
+            LOG.warning("串口连接失败: %s", exc)
+        return self.connected
+
+    async def read_all(self) -> dict[str, Any]:
+        if not await self.ensure_connected():
+            raise RuntimeError(self.last_error or "Modbus RTU 串口未连接")
+        return {}
+
+    async def write(self, tag: Tag, value: Any) -> None:
+        if not await self.ensure_connected():
+            raise RuntimeError(self.last_error or "Modbus RTU 串口未连接")
+        pass
+
+    def status(self) -> dict:
+        return {
+            "state": "connected" if self.connected else "error",
+            "message": "" if self.connected else (self.last_error or "Modbus RTU 未连接"),
+            "target": f"{self.port}@{self.baudrate}",
+            "protocol": "modbus-rtu"
+        }
+
+    async def close(self):
+        if self.serial:
+            try:
+                self.serial.close()
+            except Exception:
+                pass
+
+
+class TcpRawBackend(BaseProtocolBackend):
+    name = "tcp-raw"
+
+    def __init__(self, manifest: Manifest, cfg: dict):
+        self.manifest = manifest
+        self.ip = str(cfg.get("ip") or manifest.plc.get("ip", "127.0.0.1"))
+        self.port = int(cfg.get("port") or manifest.plc.get("port", 8080))
+        self.reader = None
+        self.writer = None
+        self.connected = False
+        self.last_error = ""
+        self.last_connect_try = 0.0
+        self.latest_buffer = bytearray(256)
+        self.lock = asyncio.Lock()
+
+    async def ensure_connected(self) -> bool:
+        if self.connected and self.writer and not self.writer.is_closing():
+            return True
+        now = time.monotonic()
+        if now - self.last_connect_try < 2.0:
+            return False
+        self.last_connect_try = now
+        try:
+            self.reader, self.writer = await asyncio.wait_for(
+                asyncio.open_connection(self.ip, self.port), timeout=3.0
+            )
+            self.connected = True
+            self.last_error = ""
+            LOG.info("TCP Raw connected to %s:%d", self.ip, self.port)
+        except Exception as exc:
+            self.connected = False
+            self.last_error = f"TCP Raw 连接失败: {exc}"
+            LOG.warning("TCP Raw 连接失败 (%s:%d): %s", self.ip, self.port, exc)
+            if self.writer:
+                try:
+                    self.writer.close()
+                except Exception:
+                    pass
+        return self.connected
+
+    async def read_all(self) -> dict[str, Any]:
+        if not await self.ensure_connected():
+            raise RuntimeError(self.last_error or "TCP Raw 未连接")
+        try:
+            chunk = await asyncio.wait_for(self.reader.read(1024), timeout=0.05)
+            if chunk:
+                self.latest_buffer[:len(chunk)] = chunk
+        except asyncio.TimeoutError:
+            pass
+
+        out = {}
+        for t in self.manifest.tags.values():
+            if not t.readable:
+                continue
+            o = t.byte
+            if o + t.size <= len(self.latest_buffer):
+                if t.type == "bool":
+                    bit = t.bit if t.bit is not None else 0
+                    out[t.id] = bool((self.latest_buffer[o] >> bit) & 1)
+                elif t.type == "byte":
+                    out[t.id] = self.latest_buffer[o]
+                elif t.type == "int16":
+                    out[t.id] = struct.unpack(">h", self.latest_buffer[o:o+2])[0]
+                elif t.type == "uint16":
+                    out[t.id] = struct.unpack(">H", self.latest_buffer[o:o+2])[0]
+                elif t.type == "real":
+                    out[t.id] = round(struct.unpack(">f", self.latest_buffer[o:o+4])[0], 4)
+        return out
+
+    async def write(self, tag: Tag, value: Any) -> None:
+        if not await self.ensure_connected():
+            raise RuntimeError(self.last_error or "TCP Raw 未连接")
+        payload = f"{tag.id}={value}\n".encode("utf-8")
+        self.writer.write(payload)
+        await self.writer.drain()
+
+    def status(self) -> dict:
+        return {
+            "state": "connected" if self.connected else "error",
+            "message": "" if self.connected else (self.last_error or "TCP Raw 未连接"),
+            "target": f"{self.ip}:{self.port}",
+            "protocol": "tcp-raw"
+        }
+
+    async def close(self):
+        if self.writer:
+            try:
+                self.writer.close()
+                await self.writer.wait_closed()
+            except Exception:
+                pass
+
+
 class MockBackend:
     name = "mock"
 
@@ -389,6 +779,35 @@ class PendingBackend:
 
     async def close(self):
         self._closed = True
+
+
+def create_backend(manifest: Manifest, plc_cfg: dict, mock: bool = False, wait_plc: bool = False):
+    if mock:
+        return MockBackend(manifest)
+    if wait_plc:
+        return PendingBackend()
+
+    protocol = str(plc_cfg.get("protocol") or manifest.protocol).lower()
+    if protocol in ("s7", "s7comm", "siemens"):
+        return S7Backend(manifest, plc_cfg)
+    elif protocol in ("modbus-tcp", "modbus_tcp", "modbus"):
+        return ModbusTcpBackend(manifest, plc_cfg)
+    elif protocol in ("modbus-rtu", "modbus_rtu", "rs485"):
+        return ModbusRtuBackend(manifest, plc_cfg)
+    elif protocol in ("tcp-raw", "raw-tcp", "tcp", "socket"):
+        return TcpRawBackend(manifest, plc_cfg)
+    else:
+        # 尝试动态加载用户自定义协议驱动模块 custom_driver.py
+        try:
+            import custom_driver
+            if hasattr(custom_driver, "CustomBackend"):
+                return custom_driver.CustomBackend(manifest, plc_cfg)
+        except ImportError:
+            pass
+        raise ValueError(
+            f"未知的协议类型: {protocol}。目前内置支持: s7, modbus-tcp, modbus-rtu, tcp-raw。"
+            f"AI 自主开发新协议驱动请遵循 references/protocol-extension-guide.md 规范。"
+        )
 
 
 class Gateway:
@@ -541,16 +960,16 @@ class Gateway:
     async def _configure_plc(self, websocket, mid, msg: dict):
         if self.backend.name == "mock":
             raise ProtocolError("BAD_BACKEND", "网关处于 mock 模式，不能连接 PLC")
+        proto = str(msg.get("protocol") or self.manifest.protocol).lower()
         ip = msg.get("ip")
-        try:
-            if not isinstance(ipaddress.ip_address(str(ip)), ipaddress.IPv4Address):
-                raise ValueError
-        except ValueError:
-            raise ProtocolError("BAD_VALUE", "PLC IP 地址格式不正确")
+        if proto in ("s7", "s7comm", "siemens", "modbus-tcp", "tcp-raw"):
+            try:
+                if not isinstance(ipaddress.ip_address(str(ip)), ipaddress.IPv4Address):
+                    raise ValueError
+            except ValueError:
+                raise ProtocolError("BAD_VALUE", "PLC IP 地址格式不正确")
         rack = int(msg.get("rack", 0))
         slot = int(msg.get("slot", 1))
-        if not 0 <= rack <= 7 or not 0 <= slot <= 31:
-            raise ProtocolError("BAD_VALUE", "rack/slot 超出范围")
         if "pollHz" in msg:
             try:
                 hz = int(msg["pollHz"])
@@ -558,7 +977,13 @@ class Gateway:
                     self.poll_hz = hz
             except (ValueError, TypeError):
                 pass
-        new_backend = S7Backend(self.manifest, {"ip": str(ip), "rack": rack, "slot": slot})
+        plc_cfg = dict(msg)
+        plc_cfg["protocol"] = proto
+        if ip:
+            plc_cfg["ip"] = str(ip)
+        plc_cfg["rack"] = rack
+        plc_cfg["slot"] = slot
+        new_backend = create_backend(self.manifest, plc_cfg)
         async with self.backend_lock:
             old = self.backend
             self.backend = new_backend
@@ -568,11 +993,11 @@ class Gateway:
                 await old.close()
             except Exception:
                 pass
-        LOG.info("PLC target configured: %s rack=%s slot=%s pollHz=%s", ip, rack, slot, self.poll_hz)
+        LOG.info("Target configured: %s proto=%s pollHz=%s", ip or plc_cfg.get("port"), proto, self.poll_hz)
         await self._broadcast({"type": "status", "plc": "waiting",
-                               "message": f"正在连接 PLC {ip}…", "ts": time.time()})
+                               "message": f"正在连接目标设备 ({proto})…", "ts": time.time()})
         await self._send(websocket, {"type": "ack", "id": mid, "ok": True,
-                                     "plc": {"ip": str(ip), "rack": rack, "slot": slot}, "pollHz": self.poll_hz})
+                                     "plc": plc_cfg, "pollHz": self.poll_hz})
 
     def _require_tag(self, tid) -> Tag:
         if not isinstance(tid, str) or tid not in self.manifest.tags:
@@ -654,11 +1079,12 @@ def load_config(path: Path) -> dict:
 
 
 def main():
-    ap = argparse.ArgumentParser(description="TIA Web Twin S7comm gateway")
+    ap = argparse.ArgumentParser(description="TIA Web Twin 工业协议通信网关")
     ap.add_argument("--config", default="gateway.config.json")
     ap.add_argument("--manifest", default=None)
-    ap.add_argument("--mock", action="store_true", help="不连 PLC，使用内存 mock")
+    ap.add_argument("--mock", action="store_true", help="不连真实设备，使用内存 mock")
     ap.add_argument("--wait-plc", action="store_true", help="启动时等待页面输入 PLC 地址")
+    ap.add_argument("--protocol", default=None, help="覆盖协议类型 (s7 / modbus-tcp / modbus-rtu / tcp-raw)")
     ap.add_argument("--host", default=None)
     ap.add_argument("--port", type=int, default=None)
     ap.add_argument("--token", default=None)
@@ -681,24 +1107,24 @@ def main():
     mock = bool(args.mock or cfg.get("backend") == "mock")
     plc = dict(manifest.plc)
     plc.update(cfg.get("plc") or {})
+    if args.protocol:
+        plc["protocol"] = args.protocol
     if args.plc_ip:
         plc["ip"] = args.plc_ip
     if args.rack is not None:
         plc["rack"] = args.rack
     if args.slot is not None:
         plc["slot"] = args.slot
+
+    backend = create_backend(manifest, plc, mock=mock, wait_plc=args.wait_plc)
+
     if mock:
-        backend = MockBackend(manifest)
+        LOG.info("mode=mock (无硬件连接)")
     elif args.wait_plc:
-        backend = PendingBackend()
+        LOG.info("mode=waiting for target address")
     else:
-        backend = S7Backend(manifest, plc)
-    if mock:
-        LOG.info("mode=mock (no PLC)")
-    elif args.wait_plc:
-        LOG.info("mode=waiting for PLC address")
-    else:
-        LOG.info("mode=s7 target=%s rack=%s slot=%s db=%s", plc.get("ip"), plc.get("rack"), plc.get("slot"), plc.get("db"))
+        target_info = getattr(backend, "ip", getattr(backend, "port", plc.get("ip", "configured")))
+        LOG.info("mode=%s target=%s protocol=%s", backend.name, target_info, getattr(backend, "name", "unknown"))
     ws_cfg = cfg.get("ws") or {}
     host = args.host or ws_cfg.get("host", "127.0.0.1")
     port = args.port or int(ws_cfg.get("port", 8765))

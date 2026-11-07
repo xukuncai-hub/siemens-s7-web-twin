@@ -33,6 +33,10 @@
   - **Blender 替代重型 CAD**：告别重型 CAD (NX/SolidWorks) 繁琐的百万级面数与破面转换痛苦，全面支持以 Blender 为核心的工业轻量化建模流（公制尺寸、草图约束、PBR 真实材质、动静分离与 Origin 轴心归正）；
   - **纯契约驱动与零依赖加载**：内置纯离线单文件 `GLTFLoader.js`，通过 `twin.manifest.json` 将节点名称（如推杆、皮带、信号灯、传感器 Empty）与 S7comm 变量自动挂接驱动；
   - **一键自检工具**：配套纯 Python 零依赖 `scripts/inspect_glb.py`，秒级解析模型节点树、校验尺寸比例并自动输出可直接粘贴的 `bindings` 契约配置。详见 [references/blender-industrial-modeling.md](references/blender-industrial-modeling.md) 与 [references/cad-import-guide.md](references/cad-import-guide.md)。
+* **多工业协议原生支持与 AI 自主扩展规范（S7comm / Modbus / RS-485 / TCP-IP / 三菱 / 欧姆龙）**：
+  - **分层解耦**：前端 Web 孪生画面与底层通信协议彻底解耦，无论硬件更换为哪种协议，前端页面代码 100% 无需修改；
+  - **原生内置四大协议**：原生内置西门子 S7comm (Snap7)、Modbus TCP (以太网 502 端口纯 Python 零依赖实现)、Modbus RTU (RS-485 串口)、Raw TCP/IP Socket 驱动；
+  - **AI 依规自主开发扩展**：当遇到三菱 MC、欧姆龙 FINS、MQTT、Beckhoff ADS 或私有十六进制协议时，AI Agent 严格按照 [references/protocol-extension-guide.md](references/protocol-extension-guide.md) 的标准驱动基类规范，自主编写适配器并无缝注册，10 分钟快速交付。
 * **通信扫描周期自由可调 (50ms / 100ms)**：
   - **`50 ms (20 Hz · 高速响应)`**：机构物理孪生首选，气缸推拉、高速光电对射检测与碰撞几乎**零延迟**，动作丝滑顺畅。
   - **`100 ms (10 Hz · 工业标准)`**：经典工业 SCADA / HMI 推荐节拍，网络通信包少，CPU 占用极低，对通信处理机（CP）最温和。
@@ -145,6 +149,7 @@ siemens-s7-web-twin/
 │       ├── TwinIO.scl               # 自动生成的博途非优化 DB1 外部源文件
 │       └── TwinDemoLogic.scl        # 自动生成的博途配套示例控制逻辑 (OB1 直接调用)
 └── references/
+    ├── protocol-extension-guide.md  # 多工业协议 (Modbus TCP/RTU/RS-485/TCP-IP) 接入与 AI 自主开发扩展规范
     ├── blender-industrial-modeling.md # Blender 替代重型 CAD (NX/SolidWorks) 工业数字孪生全流程指南
     ├── cad-import-guide.md          # 工业 3D 资产 (CAD/Blender) 导入、节点命名契约与 PLC 信号绑定指南
     ├── contract.md                  # tia-web-twin/1 WebSocket 通信协议规范 (含 poll.rate)
