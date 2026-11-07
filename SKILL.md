@@ -36,8 +36,8 @@ AI Agent（后台全自动执行）:
 
 ```bash
 # 由 AI 在后台执行，切勿让用户在终端敲：
-python scripts/make_project.py --out ./my-line          # 2D 操作台
-python scripts/make_project.py --out ./my-line --scene 3d  # 3D 产线展示
+python scripts/make_project.py --out ./my-line --mode html      # HTML 原生纯代码建模（极速原型，零依赖）
+python scripts/make_project.py --out ./my-line --mode blender   # Blender 工业级高保真建模（.glb 资产挂载）
 ```
 
 项目生成后直接交付用户，**全程无需敲任何命令**：
@@ -112,7 +112,9 @@ project/
 └── vendor/                    # 3D 模板本地 Three.js 依赖（无 CDN 纯离线）
 ```
 
-2D 和 3D 二选一；`--scene` 决定生成哪套。3D 需要浏览器 WebGL，2D 无此依赖。
+**严禁区分 2D HMI 还是 3D HMI！** 统一为 **【HTML 原生建模】与【Blender 工业建模】二选一**：
+- **HTML 原生建模 (`--mode html`)**：AI 直接在网页端用原生纯代码参数化生成被控对象与操作台，零外部资产依赖、无需安装任何 3D 软件，开箱秒开；
+- **Blender 工业建模 (`--mode blender`)**：使用 Blender 导出高保真 `.glb` 工业装配体，具备真实机构零件、PBR 金属质感与动件拓扑。
 
 参考实现都在本 skill 的 `assets/` 与 `scripts/` 中；先复用，再改场景。
 
@@ -142,16 +144,20 @@ AI 接收到用户需求时，必须第一时间识别并确定用户属于以�
       - 新手工程师导入 DB 连上真实 PLC 后，常困惑“为什么网页连上了但画面一动不动？”——根本原因在于其 PLC 内尚未编写梯形图控制逻辑，DB 输出全为 0。
       - `generate_scl.py` 在生成 `TwinIO.scl` 数据块的同时，自动配套生成一份 `TwinDemoLogic.scl` 示例控制功能块（含启停自锁、PE1 触发气缸推料、计数与复位）。用户只需在博途 OB1 中插入一行 `"TwinDemoLogic"();` 下载，即可在 1 分钟内完成首轮活体闭环联调！
 
-- **3D 呈现技术路径决策（Blender 工业建模 vs CAD 契约导入 vs 参数化代码推演）**：
-  - **路径 1（强烈推荐 · 现代化工业轻量化）：Blender 替代 CAD (NX/SolidWorks) 工业建模流**：
-    - 直接在 Blender 中完成机电产线建模或标准件装配（配合 `CAD Sketcher` 草图约束与公制单位）；
-    - 严格遵循动静分离（静态机架 `Ctrl+J` 合并降低 Draw Call）、Origin 对齐轴心点、Empty 激光探头挂载与 `+Y Up` 规范导出 `.glb`；
+- **建模呈现路径决策（严禁向用户提问 2D 还是 3D，统一提问【HTML 原生建模】vs【Blender 工业建模】）**：
+  在需要构建产线被控对象画面时，**AI 必须直接向用户提出以下清晰的二选一问题**：
+  > “请问您的产线被控对象希望采用哪种建模方式？”  
+  > 1. **【HTML 原生建模】（推荐极速原型）**：由 AI 在前端通过原生纯代码生成产线操作台与动态构件，零外部文件依赖，无需打开或安装 Blender，即写即跑；  
+  > 2. **【Blender 工业级建模】（推荐高保真交付）**：通过 Blender 制作或导入 1:1 产线机构并导出 `.glb` 工业资产，由内置的 WebGL 引擎驱动，具备真实铝型材机架、气缸零件与金属 PBR 质感。
+
+  - **选项 1：HTML 原生建模流 (`--mode html`)**：
+    - AI 直接在网页端编写 Canvas/SVG/参数化图形代码，适合快速验证控制逻辑与轻量教学；
+  - **选项 2：Blender 工业建模流 (`--mode blender`)**：
+    - 在 Blender 中完成机电产线装配（配合 `CAD Sketcher` 草图约束与公制单位）；
+    - 严格遵循动静分离（静态机架 `Ctrl+J` 合并降低 Draw Call）、Origin 对齐轴心点、Empty 激光探头挂载与 `+Y Up` 规范导出 `.glb` 到 `./assets/models/`；
     - 运行 `python scripts/inspect_glb.py assets/models/my_line.glb` 一键自检并自动生成 `twin.manifest.json` 中的 `bindings` 配置。详见 [references/blender-industrial-modeling.md](references/blender-industrial-modeling.md)。
-  - **路径 2（成熟产线对接 · 工业 CAD 契约导入）：外部 SolidWorks / NX / Inventor 模型**：
-    - 机械设计师已有 1:1 CAD 装配体，导出 STEP 经轻量化转为 `.glb` 导入；
-    - AI 将模型置于 `assets/models/`，在 `twin.manifest.json` 中配置 `cadModel` 与 `bindings` 节点映射，利用内置的 `vendor/GLTFLoader.js` 完成自动驱动。详见 [references/cad-import-guide.md](references/cad-import-guide.md)。
-  - **路径 3（备选 · 简易逻辑实训）：有限资料下的机械结构合理化推导**：
-    - 若用户无任何 3D 资产，AI 必须严格执行下述 **步骤 1.5**，自主推导全线标高基准链（如 $Y_0=0.782\text{m}$）、传力链生根（4040/4020型材）与斜槽动力学校验，杜绝悬浮零件与卡料。
+  - **（补充）传统外部重型 CAD 资产**：
+    - 若机械设计团队已有现成 SolidWorks / NX / Inventor 装配体，指导用户导出 STEP 在 Blender 中轻量化后再导出 `.glb` 接入。详见 [references/cad-import-guide.md](references/cad-import-guide.md)。
 
 ### 步骤 1：产线机电对象与信号流向分析
 

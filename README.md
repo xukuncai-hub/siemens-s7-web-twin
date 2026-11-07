@@ -50,11 +50,11 @@
 AI Agent 在后台静默执行项目脚手架（严禁让用户在终端敲命令）：
 
 ```bash
-# 生成 3D Three.js 工业产线数字孪生 (内置本地 vendor 与 20MB 绿色 Python 运行时，最推荐)
-python scripts/make_project.py --out ./my-sorting-line-3d --scene 3d
+# 方式 1：Blender 工业级建模流（推荐高保真交付，支持 .glb 资产挂载与内置离线 vendor）
+python scripts/make_project.py --out ./my-sorting-line --mode blender
 
-# 生成 2D Canvas 经典产线操作台
-python scripts/make_project.py --out ./my-sorting-line-2d
+# 方式 2：HTML 原生纯代码建模流（推荐极速原型，零外部文件依赖，秒级生成）
+python scripts/make_project.py --out ./my-sorting-line --mode html
 ```
 
 ### 2. 最终用户：3 种免终端启动方式（无需安装 Python）

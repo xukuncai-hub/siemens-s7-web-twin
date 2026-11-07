@@ -20,7 +20,7 @@ TEMPLATE = SKILL / "assets" / "template"
 RUNTIME = SKILL / "assets" / "runtime" / "tia-twin-client.js"
 PORTABLE_RUNTIME_ZIP = SKILL / "assets" / "runtime" / "portable-runtime.zip"
 THREE_DEMO = SKILL / "assets" / "three-demo"
-SCRIPTS = ["tia_gateway.py", "validate_manifest.py", "generate_scl.py", "run_twin.py", "requirements.txt"]
+SCRIPTS = ["tia_gateway.py", "validate_manifest.py", "generate_scl.py", "run_twin.py", "inspect_glb.py", "requirements.txt"]
 LAUNCHERS = [
     "start_twin.sh",
     "start_twin.bat",
@@ -34,12 +34,32 @@ TEMPLATE_FILES = ["index.html", "styles.css", "app.js", "twin.manifest.json", "g
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(description="Siemens S7 Web Twin 项目生成脚手架")
     ap.add_argument("--out", required=True, help="目标项目目录")
     ap.add_argument("--manifest", default=None, help="可选：替换模板 manifest")
     ap.add_argument("--force", action="store_true", help="目标目录非空时允许覆盖同名文件")
-    ap.add_argument("--scene", choices=["2d", "3d"], default="2d", help="2d 操作台（默认）或 3d 产线展示")
+    ap.add_argument(
+        "--mode", "--modeling",
+        choices=["html", "blender"],
+        default=None,
+        dest="mode",
+        help="建模方式选择：html (原生网页纯代码生成，零依赖极速) 或 blender (Blender 工业级高保真 3D 资产导出)"
+    )
+    ap.add_argument(
+        "--scene",
+        choices=["2d", "3d"],
+        default=None,
+        help="[兼容旧参数] 2d 对应 html 原生建模，3d 对应 blender 工业建模"
+    )
     args = ap.parse_args()
+
+    # 统一解析建模方式：优先使用 --mode，其次兼容 --scene，默认 html
+    if args.mode:
+        modeling_mode = args.mode
+    elif args.scene:
+        modeling_mode = "blender" if args.scene == "3d" else "html"
+    else:
+        modeling_mode = "html"
 
     out = Path(args.out).expanduser().resolve()
     existing = list(out.iterdir()) if out.exists() else []
@@ -61,11 +81,13 @@ def main() -> int:
         return 1
 
     out.mkdir(parents=True, exist_ok=True)
-    if args.scene == "3d":
+    if modeling_mode == "blender":
         shutil.copy2(THREE_DEMO / "index.html", out / "index.html")
         shutil.copy2(THREE_DEMO / "styles.css", out / "styles.css")
         shutil.copy2(THREE_DEMO / "app.js", out / "app.js")
         shutil.copytree(THREE_DEMO / "vendor", out / "vendor", dirs_exist_ok=True)
+        # 预先创建用于放置 Blender .glb 模型的目录
+        (out / "assets" / "models").mkdir(parents=True, exist_ok=True)
         shutil.copy2(TEMPLATE / "twin.manifest.json", out / "twin.manifest.json")
         shutil.copy2(TEMPLATE / "gateway.config.json", out / "gateway.config.json")
     else:
@@ -136,7 +158,11 @@ def main() -> int:
     cfg["pollHz"] = plc.get("defaultPollHz", cfg.get("pollHz", 10))
     cfg_path.write_text(json.dumps(cfg, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
-    print(f"项目已生成：{out}  ({args.scene.upper()} 场景)")
+    mode_desc = "【Blender 工业级建模】" if modeling_mode == "blender" else "【HTML 原生建模】"
+    print(f"项目已生成：{out}  ({mode_desc} 模式)")
+    if modeling_mode == "blender":
+        print("  · 模型放置目录：./assets/models/ (导出 .glb 后放置于此)")
+        print("  · 模型自检工具：python inspect_glb.py assets/models/your_line.glb")
     print("\n下一步（零环境门槛交付）：")
     print(f"  打开文件夹：{out}")
     print("  Windows：双击 start.bat 或运行 make_shortcut.bat 创建桌面快捷方式")
