@@ -34,6 +34,13 @@ ACCESS = {"r", "w", "rw"}
 WRITE_MODES = {"level", "pulse"}
 
 
+ADDR_RE = re.compile(
+    r"^(?:"
+    r"DB(?P<db>\d+)\.(?P<dbkind>DBX|DBB|DBW|DBD)(?P<dbbyte>\d+)(?:\.(?P<dbbit>[0-7]))?|"
+    r"(?P<area>[IQM])(?P<kind>[XBWDL]?)(?P<byte>\d+)(?:\.(?P<bit>[0-7]))?"
+    r")$",
+    re.IGNORECASE
+)
 MODBUS_ADDR_RE = re.compile(
     r"^(?:(?P<slave>\d+)#)?(?:(?P<prefix>0x|1x|3x|4x)(?P<reg1>\d+)|(?P<area>coil|di|ir|hr):(?P<reg2>\d+)(?:\.(?P<bit>[0-7]))?|(?P<num>\d{5}))$",
     re.IGNORECASE
@@ -46,30 +53,43 @@ def parse_address(addr: str, protocol: str = "s7"):
     if protocol in ("s7", "s7comm", "siemens"):
         m = ADDR_RE.match(addr or "")
         if not m:
-            raise ValueError("S7 地址格式应为 DBn.DBX/DBB/DBW/DBD<offset>[.bit]")
-        kind = m.group("kind")
-        byte = int(m.group("byte"))
-        bit = int(m.group("bit")) if m.group("bit") is not None else None
-        if kind == "DBX" and bit is None:
-            raise ValueError("布尔量地址必须带位号，如 DB1.DBX0.0")
-        if kind != "DBX" and bit is not None:
-            raise ValueError("DBB/DBW/DBD 地址不能带位号")
-        return int(m.group("db")), kind, byte, bit
+            raise ValueError("S7 地址格式应为 DBn.DBX/DBB/DBW/DBD 或 I0.0 / Q0.0 / IW64 / QW64 / M0.0 / MW10 等")
+        if m.group("db"):
+            tdb = int(m.group("db"))
+            kind = m.group("dbkind").upper()
+            byte = int(m.group("dbbyte"))
+            bit = int(m.group("dbbit")) if m.group("dbbit") is not None else None
+            area = "DB"
+            if kind == "DBX" and bit is None:
+                raise ValueError("DB 布尔量地址必须带位号，如 DB1.DBX0.0")
+            if kind != "DBX" and bit is not None:
+                raise ValueError("DBB/DBW/DBD 地址不能带位号")
+        else:
+            tdb = 0
+            area = m.group("area").upper()
+            byte = int(m.group("byte"))
+            bit = int(m.group("bit")) if m.group("bit") is not None else None
+            raw_kind = (m.group("kind") or "").upper()
+            if not raw_kind:
+                kind = "X" if bit is not None else "B"
+            else:
+                kind = raw_kind
+        return tdb, area, kind, byte, bit
     elif protocol in ("modbus-tcp", "modbus-rtu", "modbus", "modbus_tcp", "modbus_rtu", "rs485"):
         m = MODBUS_ADDR_RE.match(addr or "")
         if not m:
             raise ValueError("Modbus 地址格式应为 0x0001 / 1x0001 / 3x0001 / 4x0001 或 coil:1 / hr:1 或 5位寄存器号")
-        return 0, "MODBUS", 0, None
+        return 0, "MODBUS", "MODBUS", 0, None
     elif protocol in ("tcp-raw", "raw-tcp", "socket"):
         m = RAW_ADDR_RE.match(addr or "")
         if not m:
             raise ValueError("Raw TCP 地址格式应为 offset:0 / byte:0[.bit]")
-        return 0, "RAW", int(m.group("byte")), None
+        return 0, "RAW", "RAW", int(m.group("byte")), None
     else:
         # 自定义协议，只要有地址即可
         if not addr:
             raise ValueError("缺少地址")
-        return 0, "CUSTOM", 0, None
+        return 0, "CUSTOM", "CUSTOM", 0, None
 
 
 def check_mock_init(tag, errors):
@@ -183,43 +203,53 @@ def validate(path: Path):
             errors.append(f"{label}: address 重复 ({addr})")
         addrs.add(addr)
         try:
-            tdb, kind, byte, bit = parse_address(addr, protocol)
+            tdb, area, kind, byte, bit = parse_address(addr, protocol)
         except ValueError as exc:
             errors.append(f"{label}: {exc}")
             continue
         if protocol in ("s7", "s7comm", "siemens"):
-            if not (1 <= tdb <= 65535):
-                errors.append(f"{label}: DB 号必须在 1..65535 之间，发现 DB{tdb}")
-            if kind != KIND_FOR_TYPE[typ]:
-                errors.append(f"{label}: {typ} 应使用 {KIND_FOR_TYPE[typ]}，地址是 {kind}")
-            if kind in ("DBW", "DBD") and byte % 2:
-                errors.append(f"{label}: {kind} 偏移 {byte} 不是 2 字节对齐")
-            if kind == "DBD" and byte % 4:
-                errors.append(f"{label}: DBD 偏移 {byte} 不是 4 字节对齐")
-            size = SIZE_FOR_TYPE[typ]
-            byte_access_by_db.setdefault(tdb, {}).setdefault(byte, []).append((label, access))
-            if kind == "DBX":
-                bool_bytes_by_db.setdefault(tdb, []).append(byte)
+            if area == "DB":
+                if not (1 <= tdb <= 65535):
+                    errors.append(f"{label}: DB 号必须在 1..65535 之间，发现 DB{tdb}")
+                if kind != KIND_FOR_TYPE[typ]:
+                    errors.append(f"{label}: {typ} 应使用 {KIND_FOR_TYPE[typ]}，地址是 {kind}")
+                if kind in ("DBW", "DBD") and byte % 2:
+                    errors.append(f"{label}: {kind} 偏移 {byte} 不是 2 字节对齐")
+                if kind == "DBD" and byte % 4:
+                    errors.append(f"{label}: DBD 偏移 {byte} 不是 4 字节对齐")
             else:
-                intervals_by_db.setdefault(tdb, []).append((byte, byte + size, label))
+                if typ == "bool" and bit is None:
+                    errors.append(f"{label}: {area} 布尔量地址必须带位号，如 {area}0.0")
+                if typ in ("int16", "uint16") and byte % 2:
+                    errors.append(f"{label}: {area}W{byte} 必须 2 字节对齐")
+                if typ in ("int32", "uint32", "real") and byte % 2:
+                    errors.append(f"{label}: {area}D{byte} 必须偶数字节对齐")
+
+            size = SIZE_FOR_TYPE[typ]
+            area_key = f"{area}{tdb}" if area == "DB" else area
+            byte_access_by_db.setdefault(area_key, {}).setdefault(byte, []).append((label, access))
+            if typ == "bool":
+                bool_bytes_by_db.setdefault(area_key, []).append(byte)
+            else:
+                intervals_by_db.setdefault(area_key, []).append((byte, byte + size, label))
         check_mock_init(tag, errors)
         parsed.append((tid or label, addr, typ, access, mode, tag.get("desc", "")))
     if readable == 0:
         errors.append("至少需要一个可读 tag (access=r/rw)")
     if writable == 0:
         warnings.append("没有可写 tag，网页只能看不能操作")
-    # 粗粒度重叠检查：按 DB 分组检查标量区间不能互相重叠，也不能与布尔位所在字节重叠
+    # 粗粒度重叠检查：按区域 (DB/I/Q/M) 分组检查标量区间不能互相重叠，也不能与布尔位所在字节重叠
     for d, ivs in intervals_by_db.items():
         occupied = {}
         for start, end, label in ivs:
             for b in range(start, end):
                 if b in occupied:
-                    errors.append(f"DB{d} {label}: 字节 {b} 与 {occupied[b]} 重叠")
+                    errors.append(f"{d} {label}: 字节 {b} 与 {occupied[b]} 重叠")
                 else:
                     occupied[b] = label
         for b in sorted(set(bool_bytes_by_db.get(d, []))):
             if b in occupied:
-                errors.append(f"DB{d} 布尔位所在字节 {b} 与标量 {occupied[b]} 重叠")
+                errors.append(f"{d} 布尔位所在字节 {b} 与标量 {occupied[b]} 重叠")
     # 读写字节隔离检查：同一字节内混排 r（只读）与 w/rw（写入）可能发生 S7comm 读改写覆盖风险
     for d, bytes_map in byte_access_by_db.items():
         for b, items in bytes_map.items():
@@ -227,8 +257,8 @@ def validate(path: Path):
             w_items = [lbl for lbl, acc in items if acc in ("w", "rw")]
             if r_items and w_items:
                 warnings.append(
-                    f"DB{d}.DBB{b} 读写字节混排：该字节同时包含只读位 ({', '.join(r_items)}) 与写入位 ({', '.join(w_items)})。"
-                    f"工业最佳实践建议读写字节隔离（输入独立字节，输出独立字节），避免 S7comm 位写入发生 Read-Modify-Write 覆盖。"
+                    f"{d} 字节 {b} 读写混排：该字节同时包含只读位 ({', '.join(r_items)}) 与写入位 ({', '.join(w_items)})。"
+                    f"工业最佳实践建议读写字节隔离，避免位写入发生 Read-Modify-Write 覆盖。"
                 )
     bindings = data.get("bindings")
     if not isinstance(bindings, list) or not bindings:
@@ -251,9 +281,24 @@ def validate(path: Path):
                 errors.append(f"binding {obj}.{prop} 引用了不存在的 tag {tid}")
     if parsed:
         print(f"manifest: {data.get('project')}  ({path})")
-        dbs_found = sorted(set(int(r[1].split('.')[0].replace('DB', '')) for r in parsed))
-        dbs_str = ", ".join(f"DB{d}" for d in dbs_found)
-        print(f"PLC: {ip}  rack={rack} slot={slot}  {dbs_str}  poll={poll} Hz")
+        area_labels = []
+        dbs_found = sorted(set(
+            int(r[1].split('.')[0][2:])
+            for r in parsed
+            if r[1].upper().startswith('DB') and '.' in r[1] and r[1].split('.')[0][2:].isdigit()
+        ))
+        if dbs_found:
+            area_labels.append(", ".join(f"DB{d}" for d in dbs_found))
+        native_areas = sorted(set(
+            r[1][0].upper()
+            for r in parsed
+            if r[1] and r[1][0].upper() in ('I', 'Q', 'M')
+        ))
+        if native_areas:
+            area_labels.append(f"Native: {', '.join(native_areas)}")
+        summary_str = "  ".join(area_labels) if area_labels else f"Protocol: {protocol}"
+        plc_target = ip or plc.get("port") or "localhost"
+        print(f"PLC: {plc_target}  rack={rack} slot={slot}  {summary_str}  poll={poll} Hz")
         print(f"{'ID':<18} {'ADDRESS':<16} {'TYPE':<8} {'ACCESS':<7} {'MODE':<6} DESC")
         for row in parsed:
             print(f"{row[0]:<18} {row[1]:<16} {row[2]:<8} {row[3]:<7} {row[4]:<6} {row[5]}")

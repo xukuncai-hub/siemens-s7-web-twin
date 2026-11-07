@@ -37,7 +37,23 @@ except ImportError:  # websockets < 14
 
 LOG = logging.getLogger("tia-gateway")
 PROTOCOL = "tia-web-twin/1"
-ADDR_RE = re.compile(r"^DB(?P<db>\d+)\.(?P<kind>DBX|DBB|DBW|DBD)(?P<byte>\d+)(?:\.(?P<bit>[0-7]))?$")
+
+# 西门子 S7 存储区域代码 (Snap7 Area Constants)
+S7_AREAS = {
+    "DB": 0x84,
+    "I": 0x81,   # 过程映像输入 (PE)
+    "Q": 0x82,   # 过程映像输出 (PA)
+    "M": 0x83,   # 内部位存储器 (MK)
+}
+
+# 支持 DBn.DBX/DBB/DBW/DBD 以及原生的 I/Q/M/IW/QW/MW/MD/ID/QD
+ADDR_RE = re.compile(
+    r"^(?:"
+    r"DB(?P<db>\d+)\.(?P<dbkind>DBX|DBB|DBW|DBD)(?P<dbbyte>\d+)(?:\.(?P<dbbit>[0-7]))?|"
+    r"(?P<area>[IQM])(?P<kind>[XBWDL]?)(?P<byte>\d+)(?:\.(?P<bit>[0-7]))?"
+    r")$",
+    re.IGNORECASE
+)
 MODBUS_ADDR_RE = re.compile(
     r"^(?:(?P<slave>\d+)#)?(?:(?P<prefix>0x|1x|3x|4x)(?P<reg1>\d+)|(?P<area>coil|di|ir|hr):(?P<reg2>\d+)(?:\.(?P<bit>[0-7]))?|(?P<num>\d{5}))$",
     re.IGNORECASE
@@ -71,6 +87,7 @@ class Tag:
     byte: int
     bit: int | None
     area: str | None = None
+    area_code: int = 0x84
     reg: int | None = None
     slave_id: int | None = None
 
@@ -111,17 +128,17 @@ class Manifest:
         if not 1 <= self.poll_hz <= 30:
             raise ValueError("defaultPollHz 必须在 1..30")
 
-        # Contiguous read blocks per DB (readable tags only, used for S7comm).
+        # 按 (area_code, db) 分组的最优连续块读取 (支持多 DB、I区、Q区、M区)
         self.read_blocks = []
         if self.protocol in ("s7", "s7comm", "siemens"):
-            by_db: dict[int, list[Tag]] = {}
+            by_area_db: dict[tuple[int, int], list[Tag]] = {}
             for t in self.tags.values():
                 if t.readable:
-                    by_db.setdefault(t.db, []).append(t)
-            for db, tags in by_db.items():
+                    by_area_db.setdefault((t.area_code, t.db), []).append(t)
+            for (area_code, db), tags in by_area_db.items():
                 start = min(t.byte for t in tags)
                 end = max(t.byte + (1 if t.type == "bool" else t.size) for t in tags)
-                self.read_blocks.append((db, start, end - start, tags))
+                self.read_blocks.append((area_code, db, start, end - start, tags))
 
     @staticmethod
     def _parse_tag(item: dict, protocol: str = "s7") -> Tag:
@@ -138,21 +155,50 @@ class Manifest:
         if proto in ("s7", "s7comm", "siemens"):
             m = ADDR_RE.match(addr)
             if not m:
-                raise ValueError(f"{tid}: S7 地址格式错误 {addr}")
-            kind, byte = m.group("kind"), int(m.group("byte"))
-            bit = int(m.group("bit")) if m.group("bit") is not None else None
-            if KIND_FOR_TYPE.get(typ) != kind:
-                raise ValueError(f"{tid}: type={typ} 与地址 {kind} 不匹配")
-            if kind == "DBX" and bit is None:
-                raise ValueError(f"{tid}: bool 地址需要位号")
-            if kind != "DBX" and bit is not None:
-                raise ValueError(f"{tid}: 非 bool 地址不能带位号")
-            if kind in ("DBW", "DBD") and byte % 2:
-                raise ValueError(f"{tid}: {kind} 偏移必须 2 字节对齐")
-            if kind == "DBD" and byte % 4:
-                raise ValueError(f"{tid}: DBD 偏移必须 4 字节对齐")
+                raise ValueError(f"{tid}: S7 地址格式错误 {addr} (支持 DB1.DBX0.0 / I0.0 / Q0.0 / IW64 / QW64 / M0.0 / MW10 等)")
+            if m.group("db"):
+                area_name = "DB"
+                area_code = 0x84
+                db = int(m.group("db"))
+                kind = m.group("dbkind").upper()
+                byte = int(m.group("dbbyte"))
+                bit = int(m.group("dbbit")) if m.group("dbbit") is not None else None
+                if KIND_FOR_TYPE.get(typ) != kind:
+                    raise ValueError(f"{tid}: type={typ} 与地址 {kind} 不匹配")
+                if kind == "DBX" and bit is None:
+                    raise ValueError(f"{tid}: bool 地址需要位号")
+                if kind != "DBX" and bit is not None:
+                    raise ValueError(f"{tid}: 非 bool 地址不能带位号")
+                if kind in ("DBW", "DBD") and byte % 2:
+                    raise ValueError(f"{tid}: {kind} 偏移必须 2 字节对齐")
+                if kind == "DBD" and byte % 4:
+                    raise ValueError(f"{tid}: DBD 偏移必须 4 字节对齐")
+            else:
+                area_name = m.group("area").upper()
+                area_code = S7_AREAS[area_name]
+                db = 0
+                byte = int(m.group("byte"))
+                bit = int(m.group("bit")) if m.group("bit") is not None else None
+                raw_kind = (m.group("kind") or "").upper()
+                if typ == "bool":
+                    if bit is None:
+                        raise ValueError(f"{tid}: {area_name} 布尔量地址必须带位号，如 {area_name}0.0")
+                elif typ == "byte":
+                    if bit is not None or (raw_kind and raw_kind != "B"):
+                        raise ValueError(f"{tid}: byte 类型地址应为 {area_name}B{byte}")
+                elif typ in ("int16", "uint16"):
+                    if bit is not None or (raw_kind and raw_kind != "W"):
+                        raise ValueError(f"{tid}: {typ} 类型地址应为 {area_name}W{byte}")
+                    if byte % 2:
+                        raise ValueError(f"{tid}: {area_name}W{byte} 必须 2 字节对齐")
+                elif typ in ("int32", "uint32", "real"):
+                    if bit is not None or (raw_kind and raw_kind not in ("D", "L")):
+                        raise ValueError(f"{tid}: {typ} 类型地址应为 {area_name}D{byte}")
+                    if byte % 2:
+                        raise ValueError(f"{tid}: {area_name}D{byte} 必须偶数字节对齐")
+
             return Tag(tid, addr, typ, access, mode, pulse_ms, mock_init, desc,
-                       int(m.group("db")), byte, bit)
+                       db, byte, bit, area=area_name, area_code=area_code)
         elif proto in ("modbus-tcp", "modbus-rtu", "modbus", "modbus_tcp", "modbus_rtu", "rs485"):
             m = MODBUS_ADDR_RE.match(addr)
             if not m:
@@ -322,16 +368,16 @@ class S7Backend(BaseProtocolBackend):
             raise RuntimeError(self.last_error or "PLC not connected")
         values: dict[str, Any] = {}
         async with self.lock:
-            for db, start, size, tags in self.manifest.read_blocks:
+            for area_code, db, start, size, tags in self.manifest.read_blocks:
                 try:
-                    block = await asyncio.to_thread(self.client.db_read, db, start, size)
+                    block = await asyncio.to_thread(self.client.read_area, area_code, db, start, size)
                     values.update(parse_block(block, start, tags))
                 except Exception:
-                    # 容错：如果整块超出 DB 当前长度，尝试安全读取前几字节
+                    # 容错：如果整块超出范围，尝试逐个安全读取
                     for try_sz in (4, 2, 1):
                         if try_sz < size:
                             try:
-                                block = await asyncio.to_thread(self.client.db_read, db, start, try_sz)
+                                block = await asyncio.to_thread(self.client.read_area, area_code, db, start, try_sz)
                                 values.update(parse_block(block, start, tags))
                                 break
                             except Exception:
@@ -343,23 +389,31 @@ class S7Backend(BaseProtocolBackend):
             raise RuntimeError(self.last_error or "PLC not connected")
         async with self.lock:
             try:
+                area = tag.area_code
+                db = tag.db
+                byte = tag.byte
                 if tag.type == "bool":
-                    await asyncio.to_thread(self.client.db_write_bool, tag.db, tag.byte, tag.bit, bool(value))
+                    cur = await asyncio.to_thread(self.client.read_area, area, db, byte, 1)
+                    b = cur[0]
+                    bit = tag.bit if tag.bit is not None else 0
+                    if value:
+                        b |= (1 << bit)
+                    else:
+                        b &= ~(1 << bit)
+                    await asyncio.to_thread(self.client.write_area, area, db, byte, bytearray([b]))
                 elif tag.type == "byte":
-                    await asyncio.to_thread(self.client.db_write_byte, tag.db, tag.byte, int(value))
-                elif tag.type == "int16":
-                    await asyncio.to_thread(self.client.db_write_int, tag.db, tag.byte, int(value))
-                elif tag.type == "uint16":
-                    await asyncio.to_thread(self.client.db_write_word, tag.db, tag.byte, int(value))
-                elif tag.type == "int32":
-                    await asyncio.to_thread(self.client.db_write_dint, tag.db, tag.byte, int(value))
-                elif tag.type == "uint32":
-                    await asyncio.to_thread(self.client.db_write_dword, tag.db, tag.byte, int(value))
+                    await asyncio.to_thread(self.client.write_area, area, db, byte, bytearray([int(value) & 0xFF]))
+                elif tag.type in ("int16", "uint16"):
+                    raw = struct.pack(">h" if tag.type == "int16" else ">H", int(value))
+                    await asyncio.to_thread(self.client.write_area, area, db, byte, bytearray(raw))
+                elif tag.type in ("int32", "uint32"):
+                    raw = struct.pack(">i" if tag.type == "int32" else ">I", int(value))
+                    await asyncio.to_thread(self.client.write_area, area, db, byte, bytearray(raw))
                 elif tag.type == "real":
-                    await asyncio.to_thread(self.client.db_write_real, tag.db, tag.byte, float(value))
+                    raw = struct.pack(">f", float(value))
+                    await asyncio.to_thread(self.client.write_area, area, db, byte, bytearray(raw))
             except Exception as exc:
-                # 写入失败不影响连接状态
-                pass
+                LOG.warning("PLC write failed for tag %s (%s): %s", tag.id, tag.address, exc)
 
     def status(self) -> dict:
         return {"state": "connected" if self.connected else "error",
