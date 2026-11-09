@@ -2,8 +2,113 @@
  * =========================================================================
  * SMT 高速贴片机生产线 · 数字孪生 Web 引擎 (Three.js + TIA Twin Client)
  * 工业级双模式：离线真运动学自主仿真 + 西门子 S7/Modbus 实时网关驱动
+ * 支持中英文双语即时无缝切换 (Bilingual i18n: English / 简体中文)
  * =========================================================================
  */
+
+// 0. 中英文国际化语言字典 (i18n Translation Dictionary)
+const I18N = {
+  zh: {
+    brandTitle: "SMT-PRO 5000 · 高速贴片机生产线数字孪生系统",
+    brandSubtitle: "SIEMENS S7 & MODBUS MULTI-PROTOCOL TWIN · VER 4.8",
+    statusRunning: "产线运行中 (NORMAL)",
+    statusPaused: "生产已暂停 (PAUSED)",
+    statusEStop: "产线紧急停机 (E-STOP)",
+    gwOffline: "模式: 离线自主仿真",
+    gwConnected: "网关已连通 (S7/MODBUS)",
+    batchLabel: "生产批次:",
+    tactLabel: "节拍:",
+    btnXRay: "🔍 外壳透视",
+    btnTags: "🏷️ 工位标注",
+    btnPause: "⏸️ 暂停生产",
+    btnResume: "▶️ 恢复生产",
+    btnEStop: "🛑 产线急停",
+    btnResetEStop: "🔄 复位急停",
+    panelMetricsTitle: "📊 综合生产效能",
+    panelMetricsBadge: "LIVE METRICS",
+    kpiCphLabel: "实时贴片速度 (CPH)",
+    kpiCphSub: "额定 45,000 CPH",
+    kpiYieldLabel: "综合良品率 (Yield)",
+    kpiYieldSub: "缺陷 3 / 误报 1",
+    kpiCountLabel: "今日生产总数",
+    kpiCountSub: "目标: 3,000 PCS",
+    kpiOeeLabel: "设备综合效率 (OEE)",
+    kpiOeeSub: "开动率 97.8%",
+    waveTitle: "实时贴装速度动态波形 (CPH)",
+    axisTitle: "🎯 贴片机核心运动轴坐标 (mm)",
+    axisXLabel: "X 轴贴装小车",
+    axisYLabel: "Y 轴双驱龙门梁",
+    visionTitle: "飞行视觉相机补偿 (Vision Alignment)",
+    feederTitle: "📦 飞达料站剩余元件监控 (Reels)",
+    feederBadge: "12 FEEDERS",
+    nozzleTitle: "💨 8 联装真空吸嘴矩阵 (kPa)",
+    ovenTitle: "🔥 8 温区热风回流焊实时温控",
+    viewLabel: "视角预设:",
+    viewOverview: "产线全景",
+    viewSmt: "贴片机特写",
+    viewFeeder: "飞达料站",
+    viewOven: "回流焊透视",
+    viewAoi: "AOI 光学检测",
+    viewPcb: "跟随当前 PCB",
+    btnDefect: "⚠️ 模拟缺陷报警",
+    btnSpeed: "⏩ 速度: ",
+    logReady: "SYSTEM READY · 贴片机龙门双驱同步对准完成，激光视觉就绪",
+    tagStations: ["01 上板机", "02 锡膏印刷机", "03 接驳台", "04 高速贴片机", "05 回流焊接炉", "06 AOI 光学检测", "07 自动下板机"],
+    zoneNames: ['预热1', '预热2', '恒温1', '恒温2', '回流1', '峰值2', '降温1', '冷却2'],
+    langBtn: "🌐 English"
+  },
+  en: {
+    brandTitle: "SMT-PRO 5000 · High-Speed Pick & Place Digital Twin",
+    brandSubtitle: "SIEMENS S7 & MODBUS MULTI-PROTOCOL TWIN · VER 4.8",
+    statusRunning: "Line Running (NORMAL)",
+    statusPaused: "Production Paused (PAUSED)",
+    statusEStop: "Emergency Stop (E-STOP)",
+    gwOffline: "Mode: Offline Simulation",
+    gwConnected: "Gateway Linked (S7/MODBUS)",
+    batchLabel: "Batch ID:",
+    tactLabel: "Tact:",
+    btnXRay: "🔍 X-Ray Shell",
+    btnTags: "🏷️ 3D Tags",
+    btnPause: "⏸️ Pause",
+    btnResume: "▶️ Resume",
+    btnEStop: "🛑 E-Stop",
+    btnResetEStop: "🔄 Reset E-Stop",
+    panelMetricsTitle: "📊 Production Performance",
+    panelMetricsBadge: "LIVE METRICS",
+    kpiCphLabel: "Placement Speed (CPH)",
+    kpiCphSub: "Rated: 45,000 CPH",
+    kpiYieldLabel: "Overall Yield Rate",
+    kpiYieldSub: "Defects 3 / False 1",
+    kpiCountLabel: "Today's Output",
+    kpiCountSub: "Target: 3,000 PCS",
+    kpiOeeLabel: "Overall Efficiency (OEE)",
+    kpiOeeSub: "Availability: 97.8%",
+    waveTitle: "Real-time CPH Waveform",
+    axisTitle: "🎯 Core Axis Coordinates (mm)",
+    axisXLabel: "X Placement Head",
+    axisYLabel: "Y Dual-Drive Gantry",
+    visionTitle: "Flying Vision Alignment Compensation",
+    feederTitle: "📦 Feeder Bay Component Stock (Reels)",
+    feederBadge: "12 FEEDERS",
+    nozzleTitle: "💨 8-Nozzle Vacuum Array (kPa)",
+    ovenTitle: "🔥 8-Zone Reflow Oven Temperatures",
+    viewLabel: "Camera View:",
+    viewOverview: "Overview",
+    viewSmt: "SMT Mounter",
+    viewFeeder: "Feeder Bay",
+    viewOven: "Reflow X-Ray",
+    viewAoi: "AOI Camera",
+    viewPcb: "Follow PCB",
+    btnDefect: "⚠️ Sim Defect",
+    btnSpeed: "⏩ Speed: ",
+    logReady: "SYSTEM READY · Dual-drive gantry aligned, laser vision ready",
+    tagStations: ["01 Loader", "02 Stencil Printer", "03 Buffer", "04 SMT Mounter", "05 Reflow Oven", "06 AOI Camera", "07 Unloader"],
+    zoneNames: ['Preheat 1', 'Preheat 2', 'Soak 1', 'Soak 2', 'Reflow 1', 'Peak 2', 'Cool 1', 'Cool 2'],
+    langBtn: "🌐 简体中文"
+  }
+};
+
+let currentLang = 'zh';
 
 // 1. 初始化 WebGL 视口与管线
 const container = document.getElementById('webgl-container');
@@ -195,7 +300,7 @@ function buildBuffer(x) {
 }
 scene.add(buildBuffer(-5.0));
 
-// 工位 4: 高速多功能贴片机 (核心主角)
+// 工位 4: 高速多功能贴片机
 let gantryY;
 let carriageX;
 let nozzleArray = [];
@@ -430,7 +535,7 @@ function updateSMTKinematics(delta) {
     feederReels[currentFeederIndex].rotation.z += 0.01 * simSpeed;
   }
 
-  // 3. 贴装头运动 (当没有外部真 PLC 强制写入坐标时自主运行)
+  // 3. 贴装头运动
   if (!isGatewayMode) {
     const PICK_Z_DEPTH = -0.16;
     const PLACE_Z_DEPTH = -0.14;
@@ -469,7 +574,9 @@ function updateSMTKinematics(delta) {
         if (Math.abs(gantryY.position.z - 0.5) < 0.08) {
           smtState = SMT_STATES.MOVE_TO_PCB;
           smtTimer = 0;
-          triggerLog(`贴装头相机视觉识别完成 [元件 #${currentFeederIndex + 1} 对准合格]`);
+          triggerLog(currentLang === 'zh' 
+            ? `贴装头相机视觉识别完成 [元件 #${currentFeederIndex + 1} 对准合格]` 
+            : `Vision alignment complete [Component #${currentFeederIndex + 1} aligned]`);
         }
         break;
 
@@ -505,13 +612,13 @@ function updateSMTKinematics(delta) {
   document.getElementById('axis-x').innerText = (carriageX.position.x * 100).toFixed(2);
   document.getElementById('axis-y').innerText = (gantryY.position.z * 100).toFixed(2);
 
-  // AOI 闪烁
+  // AOI 频闪
   if (aoiLightDome) {
     const flash = Math.sin(animationTime * 4.0);
     aoiLightDome.material.color.setHex(flash > 0.8 ? 0xffffff : (flash > 0 ? 0x38bdf8 : 0x0284c7));
   }
 
-  // 回流焊发热微脉动
+  // 回流焊脉动
   ovenZoneMeshes.forEach((mesh, idx) => {
     const pulse = 1.0 + Math.sin(animationTime * 3.0 + idx) * 0.15;
     mesh.scale.set(1.0, pulse, 1.0);
@@ -590,7 +697,7 @@ for (let n = 1; n <= 8; n++) {
   const cell = document.createElement('div');
   cell.className = 'nozzle-cell';
   cell.innerHTML = `
-    <div class="nozzle-title">吸嘴 #${n}</div>
+    <div class="nozzle-title">${currentLang === 'zh' ? '吸嘴 #' : 'Nozzle #'}${n}</div>
     <div class="nozzle-kpa" id="nz-kpa-${n}">-84.2</div>
     <div class="nozzle-status">OK</div>
   `;
@@ -600,15 +707,14 @@ for (let n = 1; n <= 8; n++) {
 // 生成 8 温区
 const ovenContainer = document.getElementById('oven-container');
 const zoneTemps = [148, 162, 175, 188, 222, 246, 215, 78];
-const zoneNames = ['预热1', '预热2', '恒温1', '恒温2', '回流1', '峰值2', '降温1', '冷却2'];
-zoneNames.forEach((zname, idx) => {
+zoneTemps.forEach((temp, idx) => {
   const row = document.createElement('div');
   row.className = 'oven-zone-row';
-  const pct = Math.min(100, Math.round((zoneTemps[idx] / 260) * 100));
+  const pct = Math.min(100, Math.round((temp / 260) * 100));
   row.innerHTML = `
-    <span style="color:var(--text-muted);">${zname}</span>
+    <span class="oven-zone-name" style="color:var(--text-muted);">${I18N[currentLang].zoneNames[idx]}</span>
     <div class="temp-bar-bg"><div class="temp-bar-fill" style="width:${pct}%"></div></div>
-    <span style="font-family:var(--font-mono);font-weight:700;color:#fff;">${zoneTemps[idx]}°C</span>
+    <span style="font-family:var(--font-mono);font-weight:700;color:#fff;">${temp}°C</span>
   `;
   ovenContainer.appendChild(row);
 });
@@ -619,7 +725,84 @@ function triggerLog(msg) {
 
 /**
  * =========================================================================
- * tia-twin-client 工业网关无缝接入 (西门子 S7 & Modbus 闭环)
+ * 语言即时动态切换函数 (Language Switcher)
+ * =========================================================================
+ */
+function applyLanguage(lang) {
+  currentLang = lang;
+  const t = I18N[lang];
+
+  // 顶栏
+  document.getElementById('ui-brand-title').innerText = t.brandTitle;
+  document.getElementById('ui-brand-sub').innerText = t.brandSubtitle;
+  document.getElementById('sys-status-text').innerText = isRunning ? t.statusRunning : (isEStop ? t.statusEStop : t.statusPaused);
+  document.getElementById('gw-link-text').innerText = isGatewayMode ? t.gwConnected : t.gwOffline;
+  document.getElementById('ui-batch-label').innerText = t.batchLabel;
+  document.getElementById('ui-tact-label').innerText = t.tactLabel;
+  document.getElementById('btn-toggle-lang').innerText = t.langBtn;
+  document.getElementById('btn-toggle-xray').innerText = t.btnXRay;
+  document.getElementById('btn-toggle-tags').innerText = t.btnTags;
+  document.getElementById('btn-play-pause').innerText = isRunning ? t.btnPause : t.btnResume;
+  document.getElementById('btn-estop').innerText = isEStop ? t.btnResetEStop : t.btnEStop;
+
+  // 左侧 KPI 面板
+  document.getElementById('ui-panel-metrics').innerText = t.panelMetricsTitle;
+  document.getElementById('ui-kpi-cph').innerText = t.kpiCphLabel;
+  document.getElementById('ui-kpi-cph-sub').innerText = t.kpiCphSub;
+  document.getElementById('ui-kpi-yield').innerText = t.kpiYieldLabel;
+  document.getElementById('ui-kpi-yield-sub').innerText = t.kpiYieldSub;
+  document.getElementById('ui-kpi-count').innerText = t.kpiCountLabel;
+  document.getElementById('ui-kpi-count-sub').innerText = t.kpiCountSub;
+  document.getElementById('ui-kpi-oee').innerText = t.kpiOeeLabel;
+  document.getElementById('ui-kpi-oee-sub').innerText = t.kpiOeeSub;
+  document.getElementById('ui-wave-title').innerText = t.waveTitle;
+  document.getElementById('ui-axis-title').innerText = t.axisTitle;
+  document.getElementById('ui-axis-x').innerText = t.axisXLabel;
+  document.getElementById('ui-axis-y').innerText = t.axisYLabel;
+  document.getElementById('ui-vision-title').innerText = t.visionTitle;
+
+  // 右侧遥测面板
+  document.getElementById('ui-feeder-title').innerText = t.feederTitle;
+  document.getElementById('ui-nozzle-title').innerText = t.nozzleTitle;
+  document.getElementById('ui-oven-title').innerText = t.ovenTitle;
+
+  // 吸嘴格文字
+  document.querySelectorAll('.nozzle-title').forEach((el, idx) => {
+    el.innerText = (lang === 'zh' ? '吸嘴 #' : 'Nozzle #') + (idx + 1);
+  });
+
+  // 温区文字
+  document.querySelectorAll('.oven-zone-name').forEach((el, idx) => {
+    el.innerText = t.zoneNames[idx];
+  });
+
+  // 底栏
+  document.getElementById('ui-view-label').innerText = t.viewLabel;
+  const viewBtns = document.querySelectorAll('.camera-views .view-btn');
+  const viewKeys = [t.viewOverview, t.viewSmt, t.viewFeeder, t.viewOven, t.viewAoi, t.viewPcb];
+  viewBtns.forEach((btn, idx) => {
+    btn.innerText = viewKeys[idx];
+  });
+
+  document.getElementById('btn-sim-defect').innerText = t.btnDefect;
+  document.getElementById('btn-speed-toggle').innerText = `${t.btnSpeed}${simSpeed.toFixed(1)}x`;
+
+  // 3D 浮动标签
+  tagElements.forEach(({ el }, idx) => {
+    el.innerText = t.tagStations[idx];
+  });
+
+  triggerLog(t.logReady);
+}
+
+document.getElementById('btn-toggle-lang').addEventListener('click', () => {
+  const nextLang = currentLang === 'zh' ? 'en' : 'zh';
+  applyLanguage(nextLang);
+});
+
+/**
+ * =========================================================================
+ * tia-twin-client 工业网关无缝接入
  * =========================================================================
  */
 let twinClient = null;
@@ -630,19 +813,22 @@ if (typeof TiaTwinClient !== 'undefined') {
     twinClient.on('connect', () => {
       isGatewayMode = true;
       document.getElementById('gw-link-dot').className = 'indicator green';
-      document.getElementById('gw-link-text').innerText = '网关已连通 (S7/MODBUS)';
-      triggerLog('🟢 成功连接本地工业网关 ws://127.0.0.1:8765，进入真机闭环驱动模式');
+      document.getElementById('gw-link-text').innerText = I18N[currentLang].gwConnected;
+      triggerLog(currentLang === 'zh' 
+        ? '🟢 成功连接本地工业网关 ws://127.0.0.1:8765，进入真机闭环驱动模式' 
+        : '🟢 Connected to local gateway ws://127.0.0.1:8765, entered live PLC drive mode');
     });
 
     twinClient.on('disconnect', () => {
       isGatewayMode = false;
       document.getElementById('gw-link-dot').className = 'indicator blue';
-      document.getElementById('gw-link-text').innerText = '模式: 离线自主仿真';
-      triggerLog('⚪ 网关断开，自动平滑切回离线自主运动学仿真模式');
+      document.getElementById('gw-link-text').innerText = I18N[currentLang].gwOffline;
+      triggerLog(currentLang === 'zh'
+        ? '⚪ 网关断开，自动平滑切回离线自主运动学仿真模式'
+        : '⚪ Gateway disconnected, seamlessly fell back to offline simulation mode');
     });
 
     twinClient.on('tag', (id, val) => {
-      // 接收 PLC 标签并驱动 3D
       if (id === 'smt.axis_x') carriageX.position.x = val / 100.0;
       if (id === 'smt.axis_y') gantryY.position.z = val / 100.0;
       if (id === 'smt.vacuum_kpa') document.getElementById('nz-kpa-1').innerText = Number(val).toFixed(1);
@@ -650,14 +836,14 @@ if (typeof TiaTwinClient !== 'undefined') {
       if (id === 'smt.total_count') document.getElementById('kpi-count').innerText = val;
       if (id === 'smt.running') {
         isRunning = Boolean(val);
-        document.getElementById('sys-status-text').innerText = isRunning ? "产线运行中 (NORMAL)" : "产线停止 (STOPPED)";
+        document.getElementById('sys-status-text').innerText = isRunning ? I18N[currentLang].statusRunning : (isEStop ? I18N[currentLang].statusEStop : I18N[currentLang].statusPaused);
         document.getElementById('sys-status-dot').className = `indicator ${isRunning ? 'green' : 'red'}`;
       }
     });
 
     twinClient.connect();
   } catch (e) {
-    console.warn('TiaTwinClient 初始化提示：', e);
+    console.warn('TiaTwinClient info:', e);
   }
 }
 
@@ -707,21 +893,25 @@ document.getElementById('btn-toggle-xray').addEventListener('click', (e) => {
     mesh.material = isXRay ? MATS.acrylic : ((mesh === shellMeshes[0] || mesh === shellMeshes[3]) ? MATS.machineWhite : MATS.machineBodyDark);
   });
   if (twinClient && isGatewayMode) twinClient.write('smt.xray_mode', isXRay);
-  triggerLog(isXRay ? "🔍 已开启设备机箱半透视 X-Ray 视图" : "🔒 已恢复设备实体钣金外壳");
+  triggerLog(isXRay 
+    ? (currentLang === 'zh' ? "🔍 已开启设备机箱半透视 X-Ray 视图" : "🔍 Enabled translucent X-Ray enclosure view") 
+    : (currentLang === 'zh' ? "🔒 已恢复设备实体钣金外壳" : "🔒 Restored solid sheet metal enclosures"));
 });
 
 // 启停
 const playPauseBtn = document.getElementById('btn-play-pause');
 playPauseBtn.addEventListener('click', () => {
   isRunning = !isRunning;
-  playPauseBtn.innerText = isRunning ? "⏸️ 暂停生产" : "▶️ 恢复生产";
+  playPauseBtn.innerText = isRunning ? I18N[currentLang].btnPause : I18N[currentLang].btnResume;
   playPauseBtn.classList.toggle('active', isRunning);
-  document.getElementById('sys-status-text').innerText = isRunning ? "产线运行中 (NORMAL)" : "生产已暂停 (PAUSED)";
+  document.getElementById('sys-status-text').innerText = isRunning ? I18N[currentLang].statusRunning : I18N[currentLang].statusPaused;
   document.getElementById('sys-status-dot').className = `indicator ${isRunning ? 'green' : 'red'}`;
   if (twinClient && isGatewayMode) {
     twinClient.write(isRunning ? 'cmd.start' : 'cmd.stop', true);
   }
-  triggerLog(isRunning ? "生产线恢复自动循环运转" : "产线已安全暂停，维持真空保持状态");
+  triggerLog(isRunning 
+    ? (currentLang === 'zh' ? "生产线恢复自动循环运转" : "Production line resumed auto cycle") 
+    : (currentLang === 'zh' ? "产线已安全暂停，维持真空保持状态" : "Production paused, vacuum hold engaged"));
 });
 
 // 急停
@@ -730,22 +920,26 @@ estopBtn.addEventListener('click', () => {
   isEStop = !isEStop;
   if (isEStop) {
     isRunning = false;
-    estopBtn.innerText = "🔄 复位急停";
+    estopBtn.innerText = I18N[currentLang].btnResetEStop;
     statusTowerLights.red.material = MATS.ledRed;
     statusTowerLights.green.material = MATS.darkMetal;
-    document.getElementById('sys-status-text').innerText = "产线紧急停机 (E-STOP)";
+    document.getElementById('sys-status-text').innerText = I18N[currentLang].statusEStop;
     document.getElementById('sys-status-dot').className = "indicator red";
     if (twinClient && isGatewayMode) twinClient.write('cmd.estop', true);
-    triggerLog("🛑 收到工业安全急停信号！全线伺服制动，所有吸嘴真空安全泄压");
+    triggerLog(currentLang === 'zh' 
+      ? "🛑 收到工业安全急停信号！全线伺服制动，所有吸嘴真空安全泄压" 
+      : "🛑 Emergency Stop triggered! All servos braked, vacuum depressurized");
   } else {
     isRunning = true;
-    estopBtn.innerText = "🛑 产线急停";
+    estopBtn.innerText = I18N[currentLang].btnEStop;
     statusTowerLights.red.material = MATS.darkMetal;
     statusTowerLights.green.material = MATS.ledGreen;
-    document.getElementById('sys-status-text').innerText = "产线运行中 (NORMAL)";
+    document.getElementById('sys-status-text').innerText = I18N[currentLang].statusRunning;
     document.getElementById('sys-status-dot').className = "indicator green";
     if (twinClient && isGatewayMode) twinClient.write('cmd.reset', true);
-    triggerLog("产线急停已复位，伺服回原点完成，继续生产");
+    triggerLog(currentLang === 'zh' 
+      ? "产线急停已复位，伺服回原点完成，继续生产" 
+      : "Emergency Stop reset, servos homed, production continuing");
   }
 });
 
@@ -755,15 +949,19 @@ speedBtn.addEventListener('click', () => {
   if (simSpeed === 1.0) simSpeed = 2.0;
   else if (simSpeed === 2.0) simSpeed = 5.0;
   else simSpeed = 1.0;
-  speedBtn.innerText = `⏩ 速度: ${simSpeed.toFixed(1)}x`;
-  triggerLog(`仿真速度已切换为 ${simSpeed.toFixed(1)} 倍速`);
+  speedBtn.innerText = `${I18N[currentLang].btnSpeed}${simSpeed.toFixed(1)}x`;
+  triggerLog(currentLang === 'zh' 
+    ? `仿真速度已切换为 ${simSpeed.toFixed(1)} 倍速` 
+    : `Simulation speed set to ${simSpeed.toFixed(1)}x`);
 });
 
 // 模拟缺陷
 document.getElementById('btn-sim-defect').addEventListener('click', () => {
   statusTowerLights.yellow.material = MATS.ledYellow;
   document.getElementById('kpi-yield').innerText = "99.82%";
-  triggerLog("⚠️ [AOI 视觉告警] 焊盘 C14 锡膏量不足，判定轻微偏位 (0.012mm)");
+  triggerLog(currentLang === 'zh' 
+    ? "⚠️ [AOI 视觉告警] 焊盘 C14 锡膏量不足，判定轻微偏位 (0.012mm)" 
+    : "⚠️ [AOI Vision Alert] Pad C14 insufficient solder paste, slight offset (0.012mm)");
   setTimeout(() => { statusTowerLights.yellow.material = MATS.darkMetal; }, 4000);
 });
 
@@ -779,10 +977,10 @@ const TAG_STATIONS = [
   { name: "07 自动下板机", pos: new THREE.Vector3(16.8, TRACK_Y + 1.8, 0) },
 ];
 
-const tagElements = TAG_STATIONS.map(st => {
+const tagElements = TAG_STATIONS.map((st, idx) => {
   const el = document.createElement('div');
   el.className = 'annotation-tag';
-  el.innerText = st.name;
+  el.innerText = I18N[currentLang].tagStations[idx];
   container.appendChild(el);
   return { el, pos: st.pos };
 });

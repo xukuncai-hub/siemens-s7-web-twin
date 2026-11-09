@@ -3,6 +3,10 @@
 # 🏭 工业产线 Web 数字孪生 & 多协议控制协同平台
 ### Industrial Web Digital Twin & Multi-Protocol Control Platform
 
+<p align="center">
+  <b>[ 简体中文 ]</b> &nbsp;|&nbsp; <a href="README_en.md"><b>[ English ]</b></a>
+</p>
+
 > **双建模流派**：【HTML 原生建模（纯代码秒开）】与【Blender 工业高保真建模（全面替代 NX/SolidWorks）】  
 > **多工业协议**：原生支持西门子 S7 (S7comm)、Modbus TCP、Modbus RTU (RS-485)、Raw TCP/IP 及 AI 依规自主扩展新协议驱动  
 > *A standardized Industrial Digital Twin & Multi-Protocol Gateway bridging Web 3D/2D Interfaces and Physical PLCs / Simulators.*

@@ -22,8 +22,8 @@
     <div class="brand-box">
       <div class="brand-logo">SMT</div>
       <div class="brand-title">
-        <h1>SMT-PRO 5000 · 高速贴片机生产线数字孪生系统</h1>
-        <p>SIEMENS S7 & MODBUS MULTI-PROTOCOL TWIN · VER 4.8</p>
+        <h1 id="ui-brand-title">SMT-PRO 5000 · 高速贴片机生产线数字孪生系统</h1>
+        <p id="ui-brand-sub">SIEMENS S7 & MODBUS MULTI-PROTOCOL TWIN · VER 4.8</p>
       </div>
     </div>
 
@@ -37,16 +37,17 @@
         <span id="gw-link-text">模式: 离线自主仿真</span>
       </div>
       <div class="stat-pill">
-        <span style="color:var(--text-muted);">生产批次:</span>
+        <span id="ui-batch-label" style="color:var(--text-muted);">生产批次:</span>
         <strong style="color:var(--cyan);font-family:var(--font-mono);">LOT-202611-HDI4</strong>
       </div>
       <div class="stat-pill">
-        <span style="color:var(--text-muted);">节拍:</span>
+        <span id="ui-tact-label" style="color:var(--text-muted);">节拍:</span>
         <strong id="tact-time" style="color:#fff;font-family:var(--font-mono);">11.6 s/PCS</strong>
       </div>
     </div>
 
     <div class="topbar-ctrls">
+      <button class="btn" id="btn-toggle-lang" style="background:rgba(56,189,248,0.2);border-color:var(--cyan);font-weight:600;" title="Switch Language / 切换语言">🌐 English</button>
       <button class="btn" id="btn-toggle-xray" title="切换设备钣金外壳半透明透视">🔍 外壳透视</button>
       <button class="btn" id="btn-toggle-tags" title="显示或隐藏3D设备标签">🏷️ 工位标注</button>
       <button class="btn active" id="btn-play-pause">⏸️ 暂停生产</button>
@@ -59,57 +60,57 @@
     <!-- 左侧面板：生产效能 KPI -->
     <div class="hud-panel">
       <div class="panel-head">
-        <h2>📊 综合生产效能</h2>
+        <h2 id="ui-panel-metrics">📊 综合生产效能</h2>
         <span class="panel-badge">LIVE METRICS</span>
       </div>
 
       <div class="kpi-grid">
         <div class="kpi-card">
-          <div class="kpi-label">实时贴片速度 (CPH)</div>
+          <div class="kpi-label" id="ui-kpi-cph">实时贴片速度 (CPH)</div>
           <div class="kpi-value cyan" id="kpi-cph">43,200</div>
-          <div class="kpi-sub">额定 45,000 CPH</div>
+          <div class="kpi-sub" id="ui-kpi-cph-sub">额定 45,000 CPH</div>
         </div>
         <div class="kpi-card">
-          <div class="kpi-label">综合良品率 (Yield)</div>
+          <div class="kpi-label" id="ui-kpi-yield">综合良品率 (Yield)</div>
           <div class="kpi-value green" id="kpi-yield">99.88%</div>
-          <div class="kpi-sub">缺陷 3 / 误报 1</div>
+          <div class="kpi-sub" id="ui-kpi-yield-sub">缺陷 3 / 误报 1</div>
         </div>
         <div class="kpi-card">
-          <div class="kpi-label">今日生产总数</div>
+          <div class="kpi-label" id="ui-kpi-count">今日生产总数</div>
           <div class="kpi-value" id="kpi-count">2,864</div>
-          <div class="kpi-sub">目标: 3,000 PCS</div>
+          <div class="kpi-sub" id="ui-kpi-count-sub">目标: 3,000 PCS</div>
         </div>
         <div class="kpi-card">
-          <div class="kpi-label">设备综合效率 (OEE)</div>
+          <div class="kpi-label" id="ui-kpi-oee">设备综合效率 (OEE)</div>
           <div class="kpi-value amber" id="kpi-oee">94.2%</div>
-          <div class="kpi-sub">开动率 97.8%</div>
+          <div class="kpi-sub" id="ui-kpi-oee-sub">开动率 97.8%</div>
         </div>
       </div>
 
       <div class="chart-box">
         <div class="kpi-label" style="display:flex;justify-content:space-between;">
-          <span>实时贴装速度动态波形 (CPH)</span>
+          <span id="ui-wave-title">实时贴装速度动态波形 (CPH)</span>
           <span style="color:var(--cyan);font-family:var(--font-mono);" id="wave-val">43.2k</span>
         </div>
         <canvas id="cph-canvas" class="wave-canvas"></canvas>
       </div>
 
       <div class="panel-head" style="margin-top:6px;">
-        <h2>🎯 贴片机核心运动轴坐标 (mm)</h2>
+        <h2 id="ui-axis-title">🎯 贴片机核心运动轴坐标 (mm)</h2>
       </div>
       <div class="kpi-grid">
         <div class="kpi-card">
-          <div class="kpi-label">X 轴贴装小车</div>
+          <div class="kpi-label" id="ui-axis-x">X 轴贴装小车</div>
           <div class="kpi-value" id="axis-x" style="font-size:16px;">+142.50</div>
         </div>
         <div class="kpi-card">
-          <div class="kpi-label">Y 轴双驱龙门梁</div>
+          <div class="kpi-label" id="ui-axis-y">Y 轴双驱龙门梁</div>
           <div class="kpi-value" id="axis-y" style="font-size:16px;">-218.40</div>
         </div>
       </div>
 
       <div style="background:rgba(15,23,42,0.6);border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:8px;font-size:11px;">
-        <div style="color:var(--text-muted);margin-bottom:4px;">飞行视觉相机补偿 (Vision Alignment)</div>
+        <div id="ui-vision-title" style="color:var(--text-muted);margin-bottom:4px;">飞行视觉相机补偿 (Vision Alignment)</div>
         <div style="display:flex;justify-content:space-between;font-family:var(--font-mono);">
           <span>ΔX: <strong style="color:var(--green)">+0.003 mm</strong></span>
           <span>ΔY: <strong style="color:var(--green)">-0.002 mm</strong></span>
@@ -124,18 +125,18 @@
     <!-- 右侧面板：飞达料站、吸嘴真空、回流焊温区 -->
     <div class="hud-panel">
       <div class="panel-head">
-        <h2>📦 飞达料站剩余元件监控 (Reels)</h2>
+        <h2 id="ui-feeder-title">📦 飞达料站剩余元件监控 (Reels)</h2>
         <span class="panel-badge">12 FEEDERS</span>
       </div>
       <div class="feeder-list" id="feeder-container"></div>
 
       <div class="panel-head" style="margin-top:6px;">
-        <h2>💨 8 联装真空吸嘴矩阵 (kPa)</h2>
+        <h2 id="ui-nozzle-title">💨 8 联装真空吸嘴矩阵 (kPa)</h2>
       </div>
       <div class="nozzle-grid" id="nozzle-container"></div>
 
       <div class="panel-head" style="margin-top:6px;">
-        <h2>🔥 8 温区热风回流焊实时温控</h2>
+        <h2 id="ui-oven-title">🔥 8 温区热风回流焊实时温控</h2>
       </div>
       <div class="oven-zones" id="oven-container"></div>
     </div>
@@ -144,7 +145,7 @@
   <!-- 底栏：多角度视角切换与实时流水日志 -->
   <div class="bottombar interactive">
     <div class="camera-views">
-      <span style="font-size:12px;color:var(--text-muted);margin-right:4px;">视角预设:</span>
+      <span id="ui-view-label" style="font-size:12px;color:var(--text-muted);margin-right:4px;">视角预设:</span>
       <button class="view-btn active" data-view="overview">产线全景</button>
       <button class="view-btn" data-view="smt">贴片机特写</button>
       <button class="view-btn" data-view="feeder">飞达料站</button>

@@ -1,5 +1,9 @@
 # 🏭 SMT 高速贴片机生产线 · Web 数字孪生与工业上位机示例项目
 
+<p align="center">
+  <b>[ 简体中文 ]</b> &nbsp;|&nbsp; <a href="README_en.md"><b>[ English ]</b></a>
+</p>
+
 > 本示例位于 `siemens-s7-web-twin/examples/贴片机`，是遵循本项目标准架构（I/O 信号契约、动静分离、零穿模、多协议网关）打造的**工业级贴片机产线完整数字孪生应用**。
 
 <div align="center">
