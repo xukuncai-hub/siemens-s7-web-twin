@@ -1,0 +1,68 @@
+// ==============================================================================
+// TIA Portal 外部源文件
+// 工程项目: smt-pick-and-place
+// 自动生成自: twin.manifest.json (原生支持跨 DB)
+// 说明：此数据块必须关闭【优化的块访问】，以确保固定物理地址对齐。
+// 导入博途：项目树 -> 外部源文件 -> 添加此文件 -> 右键'从源文件生成块'
+// ==============================================================================
+
+DATA_BLOCK "TwinIO"
+{ S7_Optimized_Access := 'FALSE' }
+VERSION : 0.1
+NON_RETAIN
+   STRUCT
+      cmd_start : Bool; // DB1.DBX0.0: 产线启动按钮（上位机 -> PLC）
+      cmd_stop : Bool; // DB1.DBX0.1: 产线停止按钮（上位机 -> PLC）
+      cmd_reset : Bool; // DB1.DBX0.2: 报警复位按钮（上位机 -> PLC）
+      cmd_estop : Bool; // DB1.DBX0.3: 安全急停按钮（上位机 -> PLC）
+      smt_running : Bool; // DB1.DBX0.4: 贴片机总运行状态（PLC 输出：1=运转 0=停止）
+      smt_paused : Bool; // DB1.DBX0.5: 贴片机暂停保持状态
+      smt_alarm_active : Bool; // DB1.DBX0.6: 贴片机报警激活状态
+      smt_xray_mode : Bool; // DB1.DBX0.7: 外壳透视观察模式状态
+      sens_infeed_pe : Bool; // DB1.DBX1.0: 上板进入光电检测传感器
+      sens_clamped : Bool; // DB1.DBX1.1: PCB 工作台定位气缸夹紧到位
+      sens_vision_ok : Bool; // DB1.DBX1.2: 飞行视觉相机对准识别合格信号
+      sens_placed_ok : Bool; // DB1.DBX1.3: 单板贴装全部就绪信号
+      sens_reflow_in : Bool; // DB1.DBX1.4: 回流焊入口光电检测
+      sens_aoi_result : Bool; // DB1.DBX1.5: AOI 光学检测判定结果 (1=OK 0=NG)
+      sens_outfeed_pe : Bool; // DB1.DBX1.6: 收料机出板光电检测
+      _pad_b1_bits : ARRAY[0..0] OF Bool; // 填充位
+      smt_feeder_index : Int; // DB1.DBW2: 当前执行取料的飞达料站索引号 (1-12)
+      smt_axis_x : Real; // DB1.DBD4: X 轴贴装小车当前绝对物理坐标 (mm)
+      smt_axis_y : Real; // DB1.DBD8: Y 轴双驱龙门横梁当前绝对物理坐标 (mm)
+      smt_axis_z : Real; // DB1.DBD12: Z 轴吸嘴当前行程深度 (mm)
+      smt_vacuum_kpa : Real; // DB1.DBD16: 工作吸嘴实时真空负压 (kPa)
+      smt_cph : Real; // DB1.DBD20: 实时贴片生产速度 (Chips Per Hour)
+      smt_yield_rate : Real; // DB1.DBD24: 综合良品率统计百分比 (%)
+      smt_total_count : DInt; // DB1.DBD28: 今日已下线合格 PCB 总计数 (PCS)
+      smt_reflow_temp_peak : Real; // DB1.DBD32: 回流焊炉第6峰值温区实时测量温度 (°C)
+      smt_alarm_code : Int; // DB1.DBW36: 当前报警故障码 (0=正常, 1=飞达缺料, 2=视觉偏位超差, 3=温控波动)
+   END_STRUCT;
+
+BEGIN
+   cmd_start := FALSE;
+   cmd_stop := FALSE;
+   cmd_reset := FALSE;
+   cmd_estop := FALSE;
+   smt_running := TRUE;
+   smt_paused := FALSE;
+   smt_alarm_active := FALSE;
+   smt_xray_mode := FALSE;
+   sens_infeed_pe := TRUE;
+   sens_clamped := TRUE;
+   sens_vision_ok := TRUE;
+   sens_placed_ok := FALSE;
+   sens_reflow_in := TRUE;
+   sens_aoi_result := TRUE;
+   sens_outfeed_pe := FALSE;
+   smt_feeder_index := 1;
+   smt_axis_x := 142.50;
+   smt_axis_y := -218.40;
+   smt_axis_z := 0.00;
+   smt_vacuum_kpa := -84.20;
+   smt_cph := 43200.00;
+   smt_yield_rate := 99.88;
+   smt_total_count := 2864;
+   smt_reflow_temp_peak := 246.50;
+   smt_alarm_code := 0;
+END_DATA_BLOCK

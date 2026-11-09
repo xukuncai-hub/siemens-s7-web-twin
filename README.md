@@ -17,6 +17,7 @@
 
 <p align="center">
   <a href="#-核心四大跨越">核心跨越</a> •
+  <a href="#-典型工程案例-smt-贴片机">典型案例</a> •
   <a href="#-统一系统架构">系统架构</a> •
   <a href="#-建模双流派html-原生-vs-blender-高保真">建模双流派</a> •
   <a href="#-多工业协议全互联--ai-扩展">多工业协议</a> •
@@ -24,6 +25,12 @@
   <a href="#-完整交付体系">交付规范</a> •
   <a href="#-避坑指南">避坑指南</a>
 </p>
+
+<div align="center">
+  <br/>
+  <img src="assets/smt-pick-and-place-preview.png" width="96%" alt="SMT 高速贴片机生产线 Web 3D 数字孪生与工业上位机" style="border-radius: 8px; box-shadow: 0 8px 32px rgba(0,0,0,0.45);" />
+  <p><em>▲ 典型落地案例：SMT 高速贴片生产线 Web 3D 数字孪生与工业上位机（详情见 <a href="examples/贴片机">examples/贴片机</a>）</em></p>
+</div>
 
 </div>
 
@@ -184,6 +191,8 @@ python scripts/make_project.py --out ./my-sorting-line --mode html
 siemens-s7-web-twin/
 ├── SKILL.md                          # AI Agent Skill 核心规范、18 大硬性红线与标准 SOP
 ├── README.md                         # 项目核心说明与设计指南
+├── examples/
+│   └── 贴片机/                       # SMT 高速贴片机数字孪生完整示例 (3D/上位机/Blender/SCL/网关)
 ├── scripts/
 │   ├── make_project.py              # 一键脚手架：自动装配工程、内置便携运行时与 models/ 目录
 │   ├── inspect_glb.py               # 零依赖 3D 资产 (Blender/CAD) 节点解析与 bindings 自动生成工具
